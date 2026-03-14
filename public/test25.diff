@@ -1,30 +1,16 @@
-6,8c6,8
-< invalid ean
+7,8c7,8
 < C 0.50 1 0.56 Água
-< invalid ean
+< 1 0.56 2
 ---
-> 1 1.48 1
 > C 0.50 1 0.57 Água
 > 1 0.57 2
-10c10
-< invalid ean
+13,14c13,14
+< C 0.50 1 0.56 Água
+< 1 0.56 5
 ---
-> 2 5.98 3
-12,17c12,21
-< invalid ean
-< C 0.50 2 1.13 Água
-< invalid ean
-< A 2.99 4 11.96 Sardinhas
-< invalid ean
-< invalid ean
----
-> 4 9.92 4
 > C 0.50 1 0.57 Água
 > 1 0.57 5
-> A 2.99 2 5.98 Sardinhas
-> 2 5.98 6
-> 1 1.48 rui
+18c18
+< 2 0.56 rui
+---
 > 2 0.57 rui
-> 3 5.98 rui
-> 4 9.92 rui
-> 6 5.98 rui
