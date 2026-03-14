@@ -1,0 +1,28 @@
+100
+20
+10
+12
+D 1.20 1 1.48 Papel
+C 0.50 1 0.57 Água
+A 2.99 2 5.98 Sardinhas
+B 2.34 4 9.92 Cotonetes
+C 0.50 1 0.57 Água
+B 2.34 4 9.92 Cotonetes
+A 2.99 2 5.98 Sardinhas
+D 1.20 1 1.48 Papel
+8 17.95 1
+8 1 17.95
+A 0%
+B 6%
+C 13%
+D 23%
+C 0.50 1 0.57 Água
+A 2.99 2 5.98 Sardinhas
+3 6.55 2
+11 2 24.50
+A 0%
+B 6%
+C 13%
+D 23%
+2 6.55 Cliente final
+1 17.95 rui

@@ -1,0 +1,25 @@
+100
+20
+10
+12
+D 1.20 1 1.48 Papel
+C 0.50 1 0.56 Água
+A 2.99 2 5.98 Sardinhas
+B 2.34 4 9.92 Cotonetes
+C 0.50 1 0.56 Água
+B 2.34 4 9.92 Cotonetes
+A 2.99 2 5.98 Sardinhas
+D 1.20 1 1.48 Papel
+invalid ean
+0 0 0.00
+A 0%
+B 6%
+C 13%
+D 23%
+C 0.50 2 1.13 Água
+A 2.99 4 11.96 Sardinhas
+0 0 0.00
+A 0%
+B 6%
+C 13%
+D 23%
