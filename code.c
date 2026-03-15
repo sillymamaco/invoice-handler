@@ -4,7 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*no magic number round here */
 #define MAX_MEMORY_ALLOCATED 65535
+#define MAX_INSTRC_LENGTH 65535
+#define BUFFER_LIMIT 1024
+
+/* DATA STRUCTURES */
 
 typedef struct {
   int value;
@@ -47,6 +52,12 @@ typedef struct {
   int next_invoice_id;
 } SystemState;
 
+/* AUXILIARS FOR MEMORY HANDLING */
+
+/*
+Does what free does, but updates the amount of data dynamically allocated
+Arguments: what to free, how much to free, the State of System struct
+*/
 void free_safe(void *pointer, size_t size, SystemState *sys) {
   if (pointer) {
     sys->memory_used -= (int)size;
@@ -54,17 +65,21 @@ void free_safe(void *pointer, size_t size, SystemState *sys) {
   }
 }
 
+/*
+Ensures there's no dinamically allocated data after the program ends
+Arguments: Struct with info about the state of the program
+*/
 void clean_all(SystemState *sys) {
-  if (sys->basket)
+  if (sys->basket) // clean the basket
     free_safe(sys->basket, sys->basket_capacity * sizeof(BasketItem), sys);
-  if (sys->history) {
+  if (sys->history) { // clean invoice history
     for (int i = 0; i < sys->history_count; i++)
       if (sys->history[i].client_name)
         free_safe(sys->history[i].client_name,
                   strlen(sys->history[i].client_name) + 1, sys);
     free_safe(sys->history, sys->history_capacity * sizeof(Invoice), sys);
   }
-  if (sys->catalog) {
+  if (sys->catalog) { // clean the inventory
     for (int i = 0; i < sys->catalog_count; i++)
       if (sys->catalog[i].desc)
         free_safe(sys->catalog[i].desc, strlen(sys->catalog[i].desc) + 1, sys);
@@ -72,12 +87,20 @@ void clean_all(SystemState *sys) {
   }
 }
 
+/*
+SOS function for when the memory limit is surpassed
+Arguments: Struct with program info
+ */
 void no_memory(SystemState *sys) {
   printf("No memory.\n");
   clean_all(sys);
   exit(0);
 }
 
+/*
+malloc, but ensures theres enough space to allocate before doing so
+Arguments: size to allocate, info about the state of the program
+*/
 void *safemalloc(size_t size, SystemState *sys) {
   if ((sys->memory_used + (int)size) > MAX_MEMORY_ALLOCATED)
     no_memory(sys);
@@ -87,6 +110,12 @@ void *safemalloc(size_t size, SystemState *sys) {
   return p;
 }
 
+/*
+realloc, but ensures theres enough memory to allocate, if the new size
+is bigger
+Arguments: pointer to reallocate, old memory size, new memory size,
+info about the state of the program
+*/
 void *safe_realloc(void *pointer, size_t old_size, size_t new_size,
                    SystemState *sys) {
   int diff = (int)new_size - (int)old_size;
@@ -98,17 +127,23 @@ void *safe_realloc(void *pointer, size_t old_size, size_t new_size,
   return n;
 }
 
+/*
+Auxiliar that reads and sanitizes input
+Arguments: info about the state of the program
+*/
 char *read_token_safe(SystemState *sys) {
-  static char buf[65536];
+  char buf[MAX_INSTRC_LENGTH];
   int c, i = 0;
+  /*Skip leading spaces*/
   while ((c = getchar()) != '\n' && c != EOF && isspace(c))
     ;
   if (c != '\n' && c != EOF) {
     buf[i++] = (char)c;
     while ((c = getchar()) != '\n' && c != EOF)
-      if (i < 65535 && c != '\r') // Ignorar também o \r a meio da string
+      if (i < MAX_INSTRC_LENGTH && c != '\r') // ignores return char
         buf[i++] = (char)c;
   }
+  /*Trims spaces at the end*/
   while (i > 0 && isspace((unsigned char)buf[i - 1]))
     i--;
   buf[i] = '\0';
@@ -120,6 +155,11 @@ char *read_token_safe(SystemState *sys) {
   return res;
 }
 
+/*
+Takes an ean code as an argument and returns the index of that
+product in the catalog (auxiliar)
+Arguments: Info about the state of the program, ean of the product
+*/
 int find_product_idx(SystemState *sys, const char *ean) {
   for (int i = 0; i < sys->catalog_count; i++)
     if (strcmp(sys->catalog[i].ean, ean) == 0)
@@ -127,6 +167,11 @@ int find_product_idx(SystemState *sys, const char *ean) {
   return -1;
 }
 
+/*
+For a given iva class (char), gets the respective iva rate/percentage
+Arguments: table with iva classes and their values, amount of iva classes,
+class we're looking for
+*/
 int get_iva_rate(Iva table[], int iva_count, char iva_class) {
   for (int i = 0; i < iva_count; i++)
     if (table[i].letter == iva_class)
@@ -134,7 +179,10 @@ int get_iva_rate(Iva table[], int iva_count, char iva_class) {
   return 0;
 }
 
-// A tua validação EAN original (100% correta matematicamente)
+/*
+Auxiliar to validate ean codes (takes them as strings)
+Arguments: ean code to validate
+*/
 int validate_ean(const char *ean) {
   int sum = 0, len = (int)strlen(ean);
   if (len != 8 && len != 13)
@@ -147,6 +195,11 @@ int validate_ean(const char *ean) {
   return (check == (ean[len - 1] - '0'));
 }
 
+/*
+Helper to match ean codes to patterns that mix * and ? wildcards
+and numbers
+Arguments: pattern (mix of numbers and * and ?) and a ean code
+*/
 int match(const char *pattern, const char *text) {
   const char *star = NULL, *ts = text;
   while (*text) {
@@ -167,6 +220,11 @@ int match(const char *pattern, const char *text) {
   return *pattern == '\0';
 }
 
+/*
+Applies insertion sort(stable and fast) to the basket, sorting products
+by ean code.
+Arguments: info about the state of the system
+*/
 void sort_basket(SystemState *sys) {
   for (int i = 1; i < sys->basket_count; i++) {
     BasketItem key = sys->basket[i];
@@ -179,6 +237,12 @@ void sort_basket(SystemState *sys) {
   }
 }
 
+/*
+Prints all the attributes of a product in the required order
+Arguments: info about the state of the program, table with iva classes
+and their values, amount of iva values, index of product in the catalog.
+amount of product in stock
+*/
 void print_basket_item(SystemState *sys, Iva table[], int iva_count,
                        int cat_idx, int qty) {
   double price = sys->catalog[cat_idx].price;
@@ -188,6 +252,10 @@ void print_basket_item(SystemState *sys, Iva table[], int iva_count,
          (long)((total * 100) + 0.5) / 100.0, sys->catalog[cat_idx].desc);
 }
 
+/*
+Handles diacriticals in the beggining of descriptions/names
+Arguments: first character of a word
+*/
 int is_valid_first_char(const unsigned char *str) {
   if (!str || !str[0])
     return 0;
@@ -198,8 +266,15 @@ int is_valid_first_char(const unsigned char *str) {
   return 0;
 }
 
+/* REQUIRED FUNCTIONS */
+
+/*
+Command p: adds or updates products in the catalog/stock
+Arguments: info about the state of the program, iva table with
+classes and their values, amount of iva values
+*/
 void cmd_p(SystemState *sys, Iva table[], int iva_count) {
-  char ean[1024], iva_c;
+  char ean[14], iva_c;
   double price;
   int stock;
   if (scanf("%s %c %lf %d", ean, &iva_c, &price, &stock) != 4)
@@ -209,13 +284,10 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
   for (int i = 0; i < iva_count; i++)
     if (table[i].letter == iva_c)
       iva_ok = 1;
-
   int desc_valid =
       desc && is_valid_first_char((unsigned char *)desc) && strlen(desc) <= 50;
-
-  // CORREÇÃO: A ordem dos erros DEVE ser EAN -> IVA -> Preço -> Qty -> Desc
   if (!validate_ean(ean) || !iva_ok || price <= 0 || stock < 0 || !desc ||
-      !desc_valid) {
+      !desc_valid) { // error handling
     if (!validate_ean(ean))
       printf("invalid ean\n");
     else if (!iva_ok)
@@ -226,14 +298,13 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
       printf("invalid quantity\n");
     else
       printf("invalid description\n");
-
     if (desc)
       free_safe(desc, strlen(desc) + 1, sys);
     return;
   }
-
   int idx = find_product_idx(sys, ean);
   if (idx != -1) {
+    // check if the product is in the basket
     for (int i = 0; i < sys->basket_count; i++)
       if (strcmp(sys->basket[i].ean, ean) == 0 &&
           sys->catalog[idx].price != price) {
@@ -241,6 +312,7 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
         free_safe(desc, strlen(desc) + 1, sys);
         return;
       }
+    // update product info
     sys->catalog[idx].iva_class = iva_c;
     sys->catalog[idx].price = price;
     sys->catalog[idx].stock += stock;
@@ -248,12 +320,12 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
     sys->catalog[idx].desc = desc;
   } else {
     if (sys->catalog_count == sys->catalog_capacity) {
-      int nc = sys->catalog_capacity ? sys->catalog_capacity * 2 : 10;
-      sys->catalog =
+      int new_capacity = sys->catalog_capacity ? sys->catalog_capacity * 2 : 10;
+      sys->catalog = // if needed, expand the memory allocated for the catalog
           safe_realloc(sys->catalog, sys->catalog_capacity * sizeof(Product),
-                       nc * sizeof(Product), sys);
-      sys->catalog_capacity = nc;
-    }
+                       new_capacity * sizeof(Product), sys);
+      sys->catalog_capacity = new_capacity;
+    } // create the new product
     idx = sys->catalog_count++;
     strcpy(sys->catalog[idx].ean, ean);
     sys->catalog[idx].iva_class = iva_c;
@@ -265,50 +337,58 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
   printf("%d\n", sys->catalog[idx].stock);
 }
 
+/*
+Command l: lists all products, or info about the ones that match the pattern
+Arguments: info about the state of the program
+*/
 void cmd_l(SystemState *sys) {
   int c;
-  // Apanhar os '\r' que vêm do Windows do Mooshak
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
     ;
-  if (c == '\n' || c == EOF) {
-    int f = 0;
+  if (c == '\n' || c == EOF) { // if no pattern provided
+    int found = 0;
     for (int i = 0; i < sys->catalog_count; i++)
       if (sys->catalog[i].stock > 0) {
         printf("%s %c %.2f %d %d %s\n", sys->catalog[i].ean,
                sys->catalog[i].iva_class, sys->catalog[i].price,
                sys->catalog[i].sold, sys->catalog[i].stock,
                sys->catalog[i].desc);
-        f = 1;
+        found = 1;
       }
-    if (!f)
+    if (!found)
       printf("*: no such product\n");
     return;
   }
-  char buf[65536];
+  char buf[MAX_INSTRC_LENGTH];
   int i = 0;
   buf[i++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF)
-    if (i < 65535 && c != '\r')
+    if (i < MAX_INSTRC_LENGTH && c != '\r')
       buf[i++] = (char)c;
   buf[i] = '\0';
-  char *tok = strtok(buf, " \t\r");
-  while (tok) {
-    int ex = 0;
+  char *token = strtok(buf, " \t\r");
+  while (token) {
+    int exists = 0;
     for (int j = 0; j < sys->catalog_count; j++)
-      if (match(tok, sys->catalog[j].ean)) {
+      if (match(token, sys->catalog[j].ean)) {
         if (sys->catalog[j].stock > 0)
           printf("%s %c %.2f %d %d %s\n", sys->catalog[j].ean,
                  sys->catalog[j].iva_class, sys->catalog[j].price,
                  sys->catalog[j].sold, sys->catalog[j].stock,
                  sys->catalog[j].desc);
-        ex = 1;
+        exists = 1;
       }
-    if (!ex)
-      printf("%s: no such product\n", tok);
-    tok = strtok(NULL, " \t\r");
+    if (!exists)
+      printf("%s: no such product\n", token);
+    token = strtok(NULL, " \t\r");
   }
 }
 
+/*
+Command a: adds product to basket, whether its new or increase quantity
+Arguments: info about the state of the program, table with iva classes and their
+values , amount of iva clsses
+*/
 void cmd_a(SystemState *sys, Iva table[], int iva_count) {
   int c;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
@@ -316,68 +396,79 @@ void cmd_a(SystemState *sys, Iva table[], int iva_count) {
   if (c == '\n' || c == EOF) {
     sort_basket(sys);
     for (int i = 0; i < sys->basket_count; i++) {
-      int idx = find_product_idx(sys, sys->basket[i].ean);
-      if (idx != -1)
-        print_basket_item(sys, table, iva_count, idx, sys->basket[i].amount);
+      int cat_idx = find_product_idx(sys, sys->basket[i].ean);
+      if (cat_idx != -1)
+        print_basket_item(sys, table, iva_count, cat_idx,
+                          sys->basket[i].amount);
     }
     return;
   }
-  char buf[1024];
+  char buf[BUFFER_LIMIT];
   int i = 0;
   buf[i++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF)
-    if (i < 1023 && c != '\r')
+    if (i < BUFFER_LIMIT && c != '\r')
       buf[i++] = (char)c;
   buf[i] = '\0';
-  char s1[1024], s2[1024], ean[14];
+  char s1[BUFFER_LIMIT], s2[BUFFER_LIMIT], ean[14];
   int qty = 1;
   int n = sscanf(buf, "%s %s", s1, s2);
-  if (n == 2) {
+  if (n == 2) { // if 2 args
     qty = atoi(s1);
     strcpy(ean, s2);
-  } else
+  } else // if 1 arg
     strcpy(ean, s1);
-  int ci = find_product_idx(sys, ean), bi = -1;
+  int cat_idx = find_product_idx(sys, ean), basket_idx = -1;
   for (int j = 0; j < sys->basket_count; j++)
     if (strcmp(sys->basket[j].ean, ean) == 0)
-      bi = j;
-  if (ci == -1) {
+      basket_idx = j;
+  if (cat_idx == -1) {
     printf("%s: no such product\n", ean);
     return;
   }
-  if (qty > sys->catalog[ci].stock ||
-      (qty < 0 && (bi == -1 || sys->basket[bi].amount + qty < 0))) {
+  if (qty > sys->catalog[cat_idx].stock ||
+      (qty < 0 &&
+       (basket_idx == -1 || sys->basket[basket_idx].amount + qty < 0))) {
     printf("no stock\n");
     return;
   }
-  sys->catalog[ci].stock -= qty;
-  sys->catalog[ci].sold += qty;
-  if (bi != -1)
-    sys->basket[bi].amount += qty;
+  // update product stats
+  sys->catalog[cat_idx].stock -= qty;
+  sys->catalog[cat_idx].sold += qty;
+  if (basket_idx != -1)
+    sys->basket[basket_idx].amount += qty;
   else {
     if (sys->basket_count == sys->basket_capacity) {
-      int nc = sys->basket_capacity ? sys->basket_capacity * 2 : 10;
+      // if needed, expand the dynamic array where basket is ekept
+      int new_capacity = sys->basket_capacity ? sys->basket_capacity * 2 : 10;
       sys->basket =
           safe_realloc(sys->basket, sys->basket_capacity * sizeof(BasketItem),
-                       nc * sizeof(BasketItem), sys);
-      sys->basket_capacity = nc;
+                       new_capacity * sizeof(BasketItem), sys);
+      sys->basket_capacity = new_capacity;
     }
-    bi = sys->basket_count++;
-    strcpy(sys->basket[bi].ean, ean);
-    sys->basket[bi].amount = qty;
+    basket_idx = sys->basket_count++;
+    strcpy(sys->basket[basket_idx].ean, ean);
+    sys->basket[basket_idx].amount = qty;
   }
-  print_basket_item(sys, table, iva_count, ci, sys->basket[bi].amount);
+  // print the result item
+  print_basket_item(sys, table, iva_count, cat_idx,
+                    sys->basket[basket_idx].amount);
 }
 
+/*
+Command f: finalizes the sale and generates the invoice
+Arguments: info about the state of the program, table with iva classes and
+their values, amount of iva classes
+*/
 void cmd_f(SystemState *sys, Iva table[], int iva_count) {
   char *line = read_token_safe(sys);
-  int nif = 999999999;
+  int nif = 999999999; // default values
   char name[1024] = "Cliente final";
   if (line) {
     char *ptr = line;
     while (*ptr && isspace(*ptr))
       ptr++;
-    if (isdigit(*ptr)) {
+    if (isdigit(*ptr)) { // if line starts with nif
       sscanf(ptr, "%d", &nif);
       while (*ptr && !isspace(*ptr))
         ptr++;
@@ -395,19 +486,19 @@ void cmd_f(SystemState *sys, Iva table[], int iva_count) {
         strcpy(name, ptr);
     }
   }
-
   if (nif != 999999999 && (nif < 100000000 || nif > 999999999)) {
     printf("%d: no such nif\n", nif);
     if (line)
       free_safe(line, strlen(line) + 1, sys);
     return;
   }
-  if (strcmp(name, "error") == 0) {
+  if (strcmp(name, "error") == 0) { // if name not found,
+                                    // remove items from basket
     for (int i = 0; i < sys->basket_count; i++) {
-      int idx = find_product_idx(sys, sys->basket[i].ean);
-      if (idx != -1) {
-        sys->catalog[idx].stock += sys->basket[i].amount;
-        sys->catalog[idx].sold -= sys->basket[i].amount;
+      int cat_idx = find_product_idx(sys, sys->basket[i].ean);
+      if (cat_idx != -1) {
+        sys->catalog[cat_idx].stock += sys->basket[i].amount;
+        sys->catalog[cat_idx].sold -= sys->basket[i].amount;
       }
     }
     sys->basket_count = 0;
@@ -421,82 +512,93 @@ void cmd_f(SystemState *sys, Iva table[], int iva_count) {
       free_safe(line, strlen(line) + 1, sys);
     return;
   }
-
   double total = 0;
-  int items = 0;
+  int items = 0; // check the total price for the basket
   for (int i = 0; i < sys->basket_count; i++) {
-    int idx = find_product_idx(sys, sys->basket[i].ean);
-    if (idx != -1 && sys->basket[i].amount > 0) {
+    int cat_idx = find_product_idx(sys, sys->basket[i].ean);
+    if (cat_idx != -1 && sys->basket[i].amount > 0) {
       items += sys->basket[i].amount;
-      int iva = get_iva_rate(table, iva_count, sys->catalog[idx].iva_class);
-      double sub = (sys->catalog[idx].price * sys->basket[i].amount) *
-                   (1.0 + (iva / 100.0));
+      int iva = get_iva_rate(table, iva_count, sys->catalog[cat_idx].iva_class);
+      double sub = (sys->catalog[cat_idx].price * sys->basket[i].amount) *
+                   (1.0 + (iva / 100.0)); // round simetrically
       total += (long)((sub * 100) + 0.5) / 100.0;
     }
-  }
+  } // if needed expand the dinamic array that keeps track of invoices
   if (sys->history_count == sys->history_capacity) {
-    int nc = sys->history_capacity ? sys->history_capacity * 2 : 10;
+    int new_capacity = sys->history_capacity ? sys->history_capacity * 2 : 10;
     sys->history =
         safe_realloc(sys->history, sys->history_capacity * sizeof(Invoice),
-                     nc * sizeof(Invoice), sys);
-    sys->history_capacity = nc;
-  }
-  int hi = sys->history_count++;
-  sys->history[hi].nif = nif;
-  sys->history[hi].total = total;
-  sys->history[hi].id = sys->next_invoice_id++;
-  sys->history[hi].num_items = items;
-  sys->history[hi].client_name = safemalloc(strlen(name) + 1, sys);
-  strcpy(sys->history[hi].client_name, name);
-  printf("%d %.2f %d\n", items, total, sys->history[hi].id);
+                     new_capacity * sizeof(Invoice), sys);
+    sys->history_capacity = new_capacity;
+  } // fill in invoice info
+  int history_idx = sys->history_count++;
+  sys->history[history_idx].nif = nif;
+  sys->history[history_idx].total = total;
+  sys->history[history_idx].id = sys->next_invoice_id++;
+  sys->history[history_idx].num_items = items;
+  sys->history[history_idx].client_name = safemalloc(strlen(name) + 1, sys);
+  strcpy(sys->history[history_idx].client_name, name);
+  printf("%d %.2f %d\n", items, total, sys->history[history_idx].id);
   sys->basket_count = 0;
   if (line)
     free_safe(line, strlen(line) + 1, sys);
 }
 
+/*
+Command r: reports summaries of the system or individual products
+Arguments: info about state of the program, tablet with iva classes
+and their values, amount of iva classes
+*/
 void cmd_r(SystemState *sys, Iva table[], int iva_count) {
-  int c;
+  int c; // ignore space chars
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
     ;
-  if (c == '\n' || c == EOF) {
-    int items = 0;
-    double total = 0;
+  if (c == '\n' || c == EOF) { // if no args
+    int total_items = 0;
+    double total_sales = 0;
     for (int i = 0; i < sys->history_count; i++) {
-      items += sys->history[i].num_items;
-      total += sys->history[i].total;
+      total_items += sys->history[i].num_items;
+      total_sales += sys->history[i].total;
     }
-    // CORREÇÃO: Em Test27 apagam-se faturas, mas o número de faturas impressas
-    // deve refletir o total acumulado que foi gerado, não as que sobram na
-    // pool!
-    printf("%d %d %.2f\n", items, sys->next_invoice_id - 1, total);
+    printf("%d %d %.2f\n", total_items, sys->next_invoice_id - 1, total_sales);
 
-    Iva st[26];
-    memcpy(st, table, iva_count * sizeof(Iva));
-    for (int i = 0; i < iva_count - 1; i++)
-      for (int j = 0; j < iva_count - i - 1; j++)
-        if (st[j].letter > st[j + 1].letter) {
-          Iva t = st[j];
-          st[j] = st[j + 1];
-          st[j + 1] = t;
-        }
+    Iva sorted_table[26];
+    memcpy(sorted_table, table, iva_count * sizeof(Iva));
+
+    // sort ivas using insertion sort (memcopy bc its temporary, just for
+    // sorting)
+    for (int i = 1; i < iva_count; i++) {
+      Iva key = sorted_table[i];
+      int j = i - 1;
+      while (j >= 0 && sorted_table[j].letter > key.letter) {
+        sorted_table[j + 1] = sorted_table[j];
+        j = j - 1;
+      }
+      sorted_table[j + 1] = key;
+    }
+
     for (int i = 0; i < iva_count; i++)
-      printf("%c %d%%\n", st[i].letter, st[i].value);
+      printf("%c %d%%\n", sorted_table[i].letter, sorted_table[i].value);
     return;
   }
-  char ean[14];
+  char ean[14]; // if arg, give product info if ean is right
   ean[0] = (char)c;
   scanf("%s", ean + 1);
-  int idx = find_product_idx(sys, ean);
-  if (idx == -1)
+  int cat_idx = find_product_idx(sys, ean);
+  if (cat_idx == -1)
     printf("%s: no such product\n", ean);
   else
-    printf("%d %d %s\n", sys->catalog[idx].stock, sys->catalog[idx].sold,
-           sys->catalog[idx].desc);
+    printf("%d %d %s\n", sys->catalog[cat_idx].stock,
+           sys->catalog[cat_idx].sold, sys->catalog[cat_idx].desc);
 }
 
+/*
+Command c: lists invoices based on client name or all if empty
+Arguments: info about the state of the system
+*/
 void cmd_c(SystemState *sys) {
   char *line = read_token_safe(sys);
-  char name[1024] = "";
+  char name[BUFFER_LIMIT] = "";
   if (line) {
     char *ptr = line;
     while (*ptr && isspace(*ptr))
@@ -514,148 +616,160 @@ void cmd_c(SystemState *sys) {
     }
   }
 
-  if (strlen(name) == 0) {
-    Invoice **sorted = safemalloc(sys->history_count * sizeof(Invoice *), sys);
+  if (strlen(name) == 0) { // if no client name provided
+    Invoice **sorted_refs =
+        safemalloc(sys->history_count * sizeof(Invoice *), sys);
     for (int i = 0; i < sys->history_count; i++)
-      sorted[i] = &sys->history[i];
+      sorted_refs[i] = &sys->history[i];
+    // insertion sort on the invoices: stable and efficient
     for (int i = 1; i < sys->history_count; i++) {
-      Invoice *key = sorted[i];
+      Invoice *key = sorted_refs[i];
       int j = i - 1;
-      while (j >= 0 &&
-             (strcmp(sorted[j]->client_name, key->client_name) > 0 ||
-              (strcmp(sorted[j]->client_name, key->client_name) == 0 &&
-               sorted[j]->id > key->id))) {
-        sorted[j + 1] = sorted[j];
-        j--;
+      while (j >= 0) {
+        int cmp = strcmp(sorted_refs[j]->client_name, key->client_name);
+        if (cmp > 0 || (cmp == 0 && sorted_refs[j]->id > key->id)) {
+          sorted_refs[j + 1] = sorted_refs[j];
+          j--;
+        } else {
+          break;
+        }
       }
-      sorted[j + 1] = key;
+      sorted_refs[j + 1] = key;
     }
     for (int i = 0; i < sys->history_count; i++)
-      printf("%d %.2f %s\n", sorted[i]->id, sorted[i]->total,
-             sorted[i]->client_name);
-    free_safe(sorted, sys->history_count * sizeof(Invoice *), sys);
-  } else {
-    int f = 0;
+      printf("%d %.2f %s\n", sorted_refs[i]->id, sorted_refs[i]->total,
+             sorted_refs[i]->client_name);
+    free_safe(sorted_refs, sys->history_count * sizeof(Invoice *), sys);
+  } else { // if argument is provided
+    int found = 0;
     for (int i = 0; i < sys->history_count; i++)
       if (strcmp(sys->history[i].client_name, name) == 0) {
         printf("%d %.2f %s\n", sys->history[i].id, sys->history[i].total,
                sys->history[i].client_name);
-        f = 1;
+        found = 1;
       }
-    if (!f)
+    if (!found)
       printf("%s: no such client\n", name);
   }
   if (line)
     free_safe(line, strlen(line) + 1, sys);
 }
 
+/*
+Command d: deletes an invoice by ID or reduces stock of a product
+Arguments: info about the state of the program
+*/
 void cmd_d(SystemState *sys) {
   int c;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
     ;
   if (c == '\n' || c == EOF)
     return;
-  char buf[65536];
+  char buf[MAX_INSTRC_LENGTH];
   int i = 0;
   buf[i++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF)
-    if (i < 65535 && c != '\r')
+    if (i < MAX_INSTRC_LENGTH && c != '\r')
       buf[i++] = (char)c;
   buf[i] = '\0';
-
-  char t1[1024], t2[1024];
-  // CORREÇÃO: Utilizar sscanf para detetar exatamente quantos argumentos há!
-  int num_args = sscanf(buf, "%1023s %1023s", t1, t2);
-
-  if (num_args == 1) {
-    int id = atoi(t1), idx = -1;
+  char arg1[BUFFER_LIMIT], arg2[BUFFER_LIMIT];
+  int num_args = sscanf(buf, "%1023s %1023s", arg1, arg2);
+  if (num_args == 1) { // if one arg, is the id of the invoice
+    int invoice_id = atoi(arg1), history_idx = -1;
     for (int j = 0; j < sys->history_count; j++)
-      if (sys->history[j].id == id) {
-        idx = j;
+      if (sys->history[j].id == invoice_id) {
+        history_idx = j;
         break;
       }
-    if (idx == -1)
-      printf("%d: no such invoice\n", id);
-    else {
-      printf("%.2f %d %s\n", sys->history[idx].total, sys->history[idx].nif,
-             sys->history[idx].client_name);
-      free_safe(sys->history[idx].client_name,
-                strlen(sys->history[idx].client_name) + 1, sys);
-      for (int j = idx; j < sys->history_count - 1; j++)
+    if (history_idx == -1)
+      printf("%d: no such invoice\n", invoice_id);
+    else { // prints the invoice before deleting it
+      printf("%.2f %d %s\n", sys->history[history_idx].total,
+             sys->history[history_idx].nif,
+             sys->history[history_idx].client_name);
+      free_safe(sys->history[history_idx].client_name,
+                strlen(sys->history[history_idx].client_name) + 1, sys);
+      for (int j = history_idx; j < sys->history_count - 1; j++)
         sys->history[j] = sys->history[j + 1];
       sys->history_count--;
     }
-  } else if (num_args == 2) {
-    int qty = atoi(t2);
-    int idx = find_product_idx(sys, t1);
-    if (idx == -1)
-      printf("%s: no such product\n", t1);
+  } else if (num_args == 2) { // if two args, they are ean and amount
+    int reduction_qty = atoi(arg2);
+    int cat_idx = find_product_idx(sys, arg1);
+    if (cat_idx == -1)
+      printf("%s: no such product\n", arg1);
     else {
-      int in = 0;
+      int product_in_basket = 0;
       for (int j = 0; j < sys->basket_count; j++)
-        if (strcmp(sys->basket[j].ean, t1) == 0)
-          in = 1;
-      if (in)
+        if (strcmp(sys->basket[j].ean, arg1) == 0)
+          product_in_basket = 1;
+      if (product_in_basket)
         printf("product in use\n");
-      else if (qty <= 0 || qty > sys->catalog[idx].stock)
+      else if (reduction_qty <= 0 ||
+               reduction_qty > sys->catalog[cat_idx].stock)
         printf("invalid quantity\n");
-      else {
-        sys->catalog[idx].stock -= qty;
-        if (sys->catalog[idx].stock == 0) {
-          printf("0 %s\n", sys->catalog[idx].desc);
-          free_safe(sys->catalog[idx].desc, strlen(sys->catalog[idx].desc) + 1,
-                    sys);
-          for (int j = idx; j < sys->catalog_count - 1; j++)
+      else { // if no more stock, delete product and print it
+        sys->catalog[cat_idx].stock -= reduction_qty;
+        if (sys->catalog[cat_idx].stock == 0) {
+          printf("0 %s\n", sys->catalog[cat_idx].desc);
+          free_safe(sys->catalog[cat_idx].desc,
+                    strlen(sys->catalog[cat_idx].desc) + 1, sys);
+          for (int j = cat_idx; j < sys->catalog_count - 1; j++)
             sys->catalog[j] = sys->catalog[j + 1];
           sys->catalog_count--;
         } else
-          printf("%d %s\n", sys->catalog[idx].stock, sys->catalog[idx].desc);
+          printf("%d %s\n", sys->catalog[cat_idx].stock,
+                 sys->catalog[cat_idx].desc);
       }
     }
   }
 }
 
+/* INITIALIZATION OF VARIABLES */
 int main(int argc, char *argv[]) {
   SystemState sys = {0};
   sys.next_invoice_id = 1;
-  Iva it[26];
-  int ic = 0;
-  if (argc == 1) {
-    it[0] = (Iva){0, 'A'};
-    it[1] = (Iva){6, 'B'};
-    it[2] = (Iva){13, 'C'};
-    it[3] = (Iva){23, 'D'};
-    ic = 4;
+  Iva iva_table[26];
+  int iva_count = 0;
+  if (argc == 1) { // if no ivas provided use the default values
+    iva_table[0] = (Iva){0, 'A'};
+    iva_table[1] = (Iva){6, 'B'};
+    iva_table[2] = (Iva){13, 'C'};
+    iva_table[3] = (Iva){23, 'D'};
+    iva_count = 4;
   } else {
     FILE *f = fopen(argv[1], "r");
     if (f) {
-      while (fscanf(f, " %c %d", &it[ic].letter, &it[ic].value) == 2)
-        ic++;
+      while (fscanf(f, " %c %d", &iva_table[iva_count].letter,
+                    &iva_table[iva_count].value) == 2)
+        iva_count++;
       fclose(f);
     }
   }
-  int c;
-  while ((c = getchar()) != EOF) {
-    if (isspace(c))
+  int command;
+
+  /* MAIN LOOP */
+  while ((command = getchar()) != EOF) {
+    if (isspace(command))
       continue;
-    switch (c) {
+    switch (command) {
     case 'q':
       clean_all(&sys);
       return 0;
     case 'p':
-      cmd_p(&sys, it, ic);
+      cmd_p(&sys, iva_table, iva_count);
       break;
     case 'l':
       cmd_l(&sys);
       break;
     case 'a':
-      cmd_a(&sys, it, ic);
+      cmd_a(&sys, iva_table, iva_count);
       break;
     case 'r':
-      cmd_r(&sys, it, ic);
+      cmd_r(&sys, iva_table, iva_count);
       break;
     case 'f':
-      cmd_f(&sys, it, ic);
+      cmd_f(&sys, iva_table, iva_count);
       break;
     case 'c':
       cmd_c(&sys);
