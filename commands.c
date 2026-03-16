@@ -21,17 +21,16 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
   for (int i = 0; i < iva_count; i++)
     if (table[i].letter == iva_c)
       iva_ok = 1;
+
   if (!validate_p_input(ean, iva_ok, price, stock, desc)) {
-    if (desc)
-      free_safe(desc, strlen(desc) + 1, sys);
+    if (desc) free_safe(desc, strlen(desc) + 1, sys);
     return;
   }
 
-  int idx = find_product_idx(sys, ean, );
+  int idx = find_product_idx(sys, ean);
   if (idx != -1) {
     for (int i = 0; i < sys->basket_count; i++) {
-      if (strcmp(sys->basket[i].ean, ean) == 0 &&
-          sys->catalog[idx].price != price) {
+      if (strcmp(sys->basket[i].ean, ean) == 0 && sys->catalog[idx].price != price) {
         printf("product in use\n");
         free_safe(desc, strlen(desc) + 1, sys);
         return;
@@ -42,24 +41,22 @@ void cmd_p(SystemState *sys, Iva table[], int iva_count) {
     sys->catalog[idx].stock += stock;
     free_safe(sys->catalog[idx].desc, strlen(sys->catalog[idx].desc) + 1, sys);
     sys->catalog[idx].desc = desc;
-    printf("%d\n", sys->catalog[idx].stock);
   } else {
     if (sys->catalog_count == sys->catalog_capacity) {
       int new_cap = sys->catalog_capacity ? sys->catalog_capacity * 2 : 10;
-      sys->catalog =
-          safe_realloc(sys->catalog, sys->catalog_capacity * sizeof(Product),
-                       new_cap * sizeof(Product), sys);
+      sys->catalog = safe_realloc(sys->catalog, sys->catalog_capacity * sizeof(Product),
+                                 new_cap * sizeof(Product), sys);
       sys->catalog_capacity = new_cap;
     }
-    idx = sys->catalog_count++;
+    idx = sys->catalog_count;
     strcpy(sys->catalog[idx].ean, ean);
     sys->catalog[idx].iva_class = iva_c;
     sys->catalog[idx].price = price;
     sys->catalog[idx].stock = stock;
     sys->catalog[idx].desc = desc;
     sys->catalog[idx].sold = 0;
+    sys->catalog_count++;
   }
-  sort_catalog(sys->catalog, 0, sys->catalog_count - 1);
   printf("%d\n", sys->catalog[idx].stock);
 }
 
@@ -95,8 +92,7 @@ void cmd_l(SystemState *sys) {
         (strchr(token, '*') != NULL || strchr(token, '?') != NULL);
 
     if (!has_wildcard) {
-      uint32_t h = get_hash(token);
-      int idx = find_product_idx(sys, token, h);
+      int idx = find_product_idx(sys, token);
       if (idx != -1 && sys->catalog[idx].stock > 0) {
         print_product(&sys->catalog[idx]);
         found_any = 1;
@@ -203,8 +199,7 @@ void cmd_r(SystemState *sys, Iva table[], int iva_count) {
   char ean[14];
   ean[0] = (char)c;
   scanf("%s", ean + 1);
-  uint32_t h = get_hash(ean);
-  int cat_idx = find_product_idx(sys, ean, h);
+  int cat_idx = find_product_idx(sys, ean);
   if (cat_idx == -1)
     printf("%s: no such product\n", ean);
   else

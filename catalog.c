@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 void swap_product(Product *a, Product *b) {
   Product temp = *a;
@@ -36,13 +37,10 @@ int cmp_product_search(const void *key, const void *elem) {
 }
 
 int find_product_idx(SystemState *sys, const char *ean) {
-  if (sys->catalog_count == 0)
+    for (int i = 0; i < sys->catalog_count; i++)
+        if (strcmp(sys->catalog[i].ean, ean) == 0)
+            return i;
     return -1;
-  Product *p = bsearch(ean, sys->catalog, sys->catalog_count, sizeof(Product),
-                       cmp_product_search);
-  if (p)
-    return (int)(p - sys->catalog);
-  return -1;
 }
 
 void print_product(Product *p) {
@@ -51,24 +49,9 @@ void print_product(Product *p) {
 }
 
 void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
-  uint32_t h = get_hash(ean);
-  int cat_idx = find_product_idx(sys, ean, h);
+  int cat_idx = find_product_idx(sys, ean);
   if (cat_idx == -1) {
     printf("%s: no such product\n", ean);
-    return;
-  }
-
-  int will_delete = (sys->catalog[cat_idx].stock <= qty);
-  int in_basket = 0;
-  for (int j = 0; j < sys->basket_count; j++) {
-    if (sys->basket[j].hash == h && strcmp(sys->basket[j].ean, ean) == 0) {
-      in_basket = 1;
-      break;
-    }
-  }
-
-  if (will_delete && in_basket) {
-    printf("product in use\n");
     return;
   }
 
@@ -77,13 +60,25 @@ void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
     return;
   }
 
+  int will_delete = (sys->catalog[cat_idx].stock == qty);
+  if (will_delete) {
+    for (int j = 0; j < sys->basket_count; j++) {
+      if (strcmp(sys->basket[j].ean, ean) == 0) {
+        printf("product in use\n");
+        return;
+      }
+    }
+  }
+
   sys->catalog[cat_idx].stock -= qty;
   if (sys->catalog[cat_idx].stock == 0) {
     printf("0 %s\n", sys->catalog[cat_idx].desc);
-    free_safe(sys->catalog[cat_idx].desc,
-              strlen(sys->catalog[cat_idx].desc) + 1, sys);
-    for (int j = cat_idx; j < sys->catalog_count - 1; j++)
+    free_safe(sys->catalog[cat_idx].desc, strlen(sys->catalog[cat_idx].desc) + 1, sys);
+    
+    // Shift para a esquerda para manter o catálogo contíguo e ordenado
+    for (int j = cat_idx; j < sys->catalog_count - 1; j++) {
       sys->catalog[j] = sys->catalog[j + 1];
+    }
     sys->catalog_count--;
   } else {
     printf("%d %s\n", sys->catalog[cat_idx].stock, sys->catalog[cat_idx].desc);

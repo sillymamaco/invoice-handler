@@ -64,10 +64,9 @@ void print_sorted_basket(SystemState *sys, Iva table[], int iva_count) {
 
 void process_basket_add(SystemState *sys, Iva table[], int iva_count,
                         const char *ean, int qty) {
-  uint32_t h = get_hash(ean);
-  int cat_idx = find_product_idx(sys, ean, h), basket_idx = -1;
+  int cat_idx = find_product_idx(sys, ean), basket_idx = -1;
   for (int j = 0; j < sys->basket_count; j++) {
-    if (sys->basket[j].hash == h && strcmp(sys->basket[j].ean, ean) == 0) {
+    if (strcmp(sys->basket[j].ean, ean) == 0) {
       basket_idx = j;
       break;
     }

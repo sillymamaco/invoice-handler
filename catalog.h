@@ -38,5 +38,5 @@ void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty);
  * @param low Beginning of the array.
  * @param high End of array.
  */
-void sort_catalog(Product *arr, int low, int high)
+void sort_catalog(Product *arr, int low, int high);
 #endif
