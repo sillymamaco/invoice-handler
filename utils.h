@@ -1,12 +1,13 @@
 /**
  * @file utils.h
- * @brief Utility and validation functions.
  * @author ist1117890
+ * @brief Utility, hashing, and validation functions.
  */
 #ifndef UTILS_H
 #define UTILS_H
 
 #include "types.h"
+#include <stdint.h>
 
 /**
  * @brief Gets the VAT percentage based on its letter class.

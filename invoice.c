@@ -1,9 +1,11 @@
 #include "invoice.h"
+#include "basket.h"
 #include "catalog.h"
 #include "memory.h"
 #include "utils.h"
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void parse_invoice_client(char *line, int *nif, char **name) {
@@ -47,17 +49,18 @@ void finalize_invoice(SystemState *sys, Iva table[], int iva_count, int nif,
       items += sys->basket[i].amount;
       int iva = get_iva_rate(table, iva_count, sys->catalog[cat_idx].iva_class);
       double sub = (sys->catalog[cat_idx].price * sys->basket[i].amount) *
-                   (1.0 + (iva / PCT_DIV));
+                   (1.0 + (iva / 100.0));
       total += round_money(sub);
     }
   }
   if (sys->history_count == sys->history_capacity) {
-    int new_cap = sys->history_capacity ? sys->history_capacity * 2 : BASE_CAP;
+    int new_cap = sys->history_capacity ? sys->history_capacity * 2 : 10;
     sys->history =
         safe_realloc(sys->history, sys->history_capacity * sizeof(Invoice),
                      new_cap * sizeof(Invoice), sys);
     sys->history_capacity = new_cap;
   }
+
   Invoice new_inv;
   new_inv.nif = nif;
   new_inv.total = total;
@@ -66,6 +69,7 @@ void finalize_invoice(SystemState *sys, Iva table[], int iva_count, int nif,
   new_inv.client_name = safemalloc(strlen(name) + 1, sys);
   strcpy(new_inv.client_name, name);
 
+  /* INSERTION SORT */
   int i = sys->history_count - 1;
   while (i >= 0) {
     int cmp = strcmp(sys->history[i].client_name, new_inv.client_name);
@@ -87,26 +91,24 @@ void finalize_invoice(SystemState *sys, Iva table[], int iva_count, int nif,
 
 void cmd_d_delete_inv(SystemState *sys, int inv_id) {
   int h_idx = -1;
-  for (int j = 0; j < sys->history_count; j++) {
+  for (int j = 0; j < sys->history_count; j++)
     if (sys->history[j].id == inv_id) {
       h_idx = j;
       break;
     }
-  }
   if (h_idx == -1) {
     printf("%d: no such invoice\n", inv_id);
     return;
   }
+
   printf("%.2f %d %s\n", sys->history[h_idx].total, sys->history[h_idx].nif,
          sys->history[h_idx].client_name);
   sys->global_items -= sys->history[h_idx].num_items;
   sys->global_sales -= sys->history[h_idx].total;
+  free_safe(sys->history[h_idx].client_name,
+            strlen(sys->history[h_idx].client_name) + 1, sys);
 
-  size_t len = strlen(sys->history[h_idx].client_name) + 1;
-  free_safe(sys->history[h_idx].client_name, len, sys);
-
-  for (int j = h_idx; j < sys->history_count - 1; j++) {
+  for (int j = h_idx; j < sys->history_count - 1; j++)
     sys->history[j] = sys->history[j + 1];
-  }
   sys->history_count--;
 }

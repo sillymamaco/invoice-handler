@@ -12,7 +12,7 @@ int get_iva_rate(Iva table[], int iva_count, char iva_class) {
 
 int validate_ean(const char *ean) {
   int sum = 0, len = (int)strlen(ean);
-  if (len != EAN_LEN_8 && len != EAN_LEN_13)
+  if (len != 8 && len != 13)
     return 0;
   for (int i = 0; i < len - 1; i++) {
     int val = ean[i] - '0';
@@ -33,9 +33,8 @@ int match(const char *pattern, const char *text) {
     } else if (star) {
       pattern = star + 1;
       text = ++ts;
-    } else {
+    } else
       return 0;
-    }
   }
   while (*pattern == '*')
     pattern++;
@@ -69,13 +68,12 @@ int is_valid_name_start(const char *s) {
 }
 
 double round_money(double val) {
-  return (long long)(val * PCT_DIV + ROUND_OFFSET) / PCT_DIV;
+  return (long long)(val * 100.0 + 0.500000001) / 100.0;
 }
 
 int validate_p_input(const char *ean, int iva_ok, double price, int stock,
                      const char *desc) {
-  int desc_valid =
-      desc && is_valid_desc_start(desc) && strlen(desc) <= MAX_DESC_LEN;
+  int desc_valid = desc && is_valid_desc_start(desc) && strlen(desc) <= 50;
   if (!validate_ean(ean)) {
     printf("invalid ean\n");
     return 0;

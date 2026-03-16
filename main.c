@@ -1,7 +1,7 @@
 /**
  * @file main.c
- * @brief Main execution loop and command dispatcher.
  * @author ist1117890
+ * @brief Main execution loop and command dispatcher.
  */
 #include "commands.h"
 #include "memory.h"
@@ -10,10 +10,10 @@
 #include <stdio.h>
 
 /**
- * @brief Program entry point.
- * @param argc Argument count.
- * @param argv Argument vector.
- * @return Exit status code.
+ * @brief Main execution loop.
+ * @param argc Number of arguments.
+ * @param argv Array of arguments.
+ * @return 0 on success.
  */
 int main(int argc, char *argv[]) {
   SystemState sys = {0};
@@ -31,9 +31,8 @@ int main(int argc, char *argv[]) {
     FILE *f = fopen(argv[1], "r");
     if (f) {
       while (fscanf(f, " %c %d", &iva_table[iva_count].letter,
-                    &iva_table[iva_count].value) == 2) {
+                    &iva_table[iva_count].value) == 2)
         iva_count++;
-      }
       fclose(f);
     }
   }

@@ -1,12 +1,13 @@
 /**
  * @file memory.h
- * @brief Memory management and cleanup functions.
  * @author ist1117890
+ * @brief Memory management and cleanup functions.
  */
 #ifndef MEMORY_H
 #define MEMORY_H
 
 #include "types.h"
+#include <stddef.h>
 
 /**
  * @brief Safely frees a pointer and updates memory usage.

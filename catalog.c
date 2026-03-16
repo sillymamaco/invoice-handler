@@ -1,8 +1,35 @@
 #include "catalog.h"
 #include "memory.h"
+#include "utils.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+
+void swap_product(Product *a, Product *b) {
+  Product temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+int partition_catalog(Product *arr, int low, int high) {
+  char *pivot = arr[high].ean;
+  int i = (low - 1);
+  for (int j = low; j < high; j++) {
+    if (strcmp(arr[j].ean, pivot) < 0) {
+      i++;
+      swap_product(&arr[i], &arr[j]);
+    }
+  }
+  swap_product(&arr[i + 1], &arr[high]);
+  return (i + 1);
+}
+
+void sort_catalog(Product *arr, int low, int high) {
+  if (low < high) {
+    int pi = partition_catalog(arr, low, high);
+    sort_catalog(arr, low, pi - 1);
+    sort_catalog(arr, pi + 1, high);
+  }
+}
 
 int cmp_product_search(const void *key, const void *elem) {
   return strcmp((const char *)key, ((const Product *)elem)->ean);
@@ -23,58 +50,38 @@ void print_product(Product *p) {
          p->stock, p->desc);
 }
 
-int insert_product_sorted(SystemState *sys, const char *ean, char iva_c,
-                          double price, int stock, char *desc) {
-  if (sys->catalog_count == sys->catalog_capacity) {
-    int new_cap = sys->catalog_capacity ? sys->catalog_capacity * 2 : BASE_CAP;
-    sys->catalog =
-        safe_realloc(sys->catalog, sys->catalog_capacity * sizeof(Product),
-                     new_cap * sizeof(Product), sys);
-    sys->catalog_capacity = new_cap;
-  }
-  int idx = sys->catalog_count - 1;
-  while (idx >= 0 && strcmp(sys->catalog[idx].ean, ean) > 0) {
-    sys->catalog[idx + 1] = sys->catalog[idx];
-    idx--;
-  }
-  idx++;
-  strcpy(sys->catalog[idx].ean, ean);
-  sys->catalog[idx].iva_class = iva_c;
-  sys->catalog[idx].price = price;
-  sys->catalog[idx].stock = stock;
-  sys->catalog[idx].desc = desc;
-  sys->catalog[idx].sold = 0;
-  sys->catalog_count++;
-  return idx;
-}
-
 void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
-  int cat_idx = find_product_idx(sys, ean);
+  uint32_t h = get_hash(ean);
+  int cat_idx = find_product_idx(sys, ean, h);
   if (cat_idx == -1) {
     printf("%s: no such product\n", ean);
     return;
   }
+
   int will_delete = (sys->catalog[cat_idx].stock <= qty);
   int in_basket = 0;
   for (int j = 0; j < sys->basket_count; j++) {
-    if (strcmp(sys->basket[j].ean, ean) == 0) {
+    if (sys->basket[j].hash == h && strcmp(sys->basket[j].ean, ean) == 0) {
       in_basket = 1;
       break;
     }
   }
+
   if (will_delete && in_basket) {
     printf("product in use\n");
     return;
   }
+
   if (qty <= 0 || qty > sys->catalog[cat_idx].stock) {
     printf("invalid quantity\n");
     return;
   }
+
   sys->catalog[cat_idx].stock -= qty;
   if (sys->catalog[cat_idx].stock == 0) {
     printf("0 %s\n", sys->catalog[cat_idx].desc);
-    size_t len = strlen(sys->catalog[cat_idx].desc) + 1;
-    free_safe(sys->catalog[cat_idx].desc, len, sys);
+    free_safe(sys->catalog[cat_idx].desc,
+              strlen(sys->catalog[cat_idx].desc) + 1, sys);
     for (int j = cat_idx; j < sys->catalog_count - 1; j++)
       sys->catalog[j] = sys->catalog[j + 1];
     sys->catalog_count--;

@@ -1,7 +1,7 @@
 /**
  * @file basket.h
- * @brief Active basket operations and sorting.
  * @author ist1117890
+ * @brief Active basket operations and sorting.
  */
 #ifndef BASKET_H
 #define BASKET_H

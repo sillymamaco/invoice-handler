@@ -1,7 +1,7 @@
 /**
  * @file commands.h
- * @brief Definitions for command executors.
  * @author ist1117890
+ * @brief Definitions for command executors.
  */
 #ifndef COMMANDS_H
 #define COMMANDS_H

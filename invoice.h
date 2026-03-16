@@ -1,7 +1,7 @@
 /**
  * @file invoice.h
- * @brief Invoice management, creation, and deletion.
  * @author ist1117890
+ * @brief Invoice management, creation, and deletion.
  */
 #ifndef INVOICE_H
 #define INVOICE_H
