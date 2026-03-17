@@ -1,20 +1,12 @@
 /**
  * @file main.c
- * @author ist1117890
- * @brief Main execution loop and command dispatcher.
+ * @brief Main entry point containing initialization and command dispatch loop.
  */
-#include "commands.h"
-#include "memory.h"
-#include "types.h"
-#include <ctype.h>
-#include <stdio.h>
 
-/**
- * @brief Main execution loop.
- * @param argc Number of arguments.
- * @param argv Array of arguments.
- * @return 0 on success.
- */
+#include "common.h"
+#include "memory.h"
+#include "commands.h"
+
 int main(int argc, char *argv[]) {
   SystemState sys = {0};
   sys.next_invoice_id = 1;
@@ -30,7 +22,7 @@ int main(int argc, char *argv[]) {
   } else {
     FILE *f = fopen(argv[1], "r");
     if (f) {
-      while (fscanf(f, " %c %d", &iva_table[iva_count].letter,
+      while (iva_count < 26 && fscanf(f, " %c %d", &iva_table[iva_count].letter,
                     &iva_table[iva_count].value) == 2)
         iva_count++;
       fclose(f);
