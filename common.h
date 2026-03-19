@@ -24,8 +24,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief Maximum heap memory the program may use (4 MiB). */
-#define MAX_MEMORY_ALLOCATED (4 * 1024 * 1024)
+/** @brief Maximum heap memory the program may use (8 MiB). */
+#define MAX_MEMORY_ALLOCATED (8 * 1024 * 1024)
 
 /** @brief Maximum length of a single input line in bytes (64 KiB). */
 #define MAX_INSTRC_LENGTH 65535
@@ -91,6 +91,7 @@ typedef struct {
   int invoice_cap;   /**< Allocated capacity of the @c invoices array. */
 } ClientRecord;
 
+
 /**
  * @brief One line item in the shopping basket.
  */
@@ -102,24 +103,24 @@ typedef struct {
 /**
  * @brief Top-level system state passed to every command handler.
  *
- * @details All dynamic arrays are grown with safe_realloc() and released
+ * @details All dynamic arrays are grown with safe_realloc and released
  * with clean_all(). This struct is the single root of all heap allocations;
  * no global variables are used.
  */
 typedef struct {
-  Product *catalog;     /**< Dynamic array of products sorted by EAN. */
-  int catalog_count;    /**< Number of products currently in the catalog. */
-  int catalog_capacity; /**< Allocated capacity of the @c catalog array. */
+  Product *catalog;      /**< Dynamic array of products sorted by EAN. */
+  int catalog_count;     /**< Number of products currently in the catalog. */
+  int catalog_capacity;  /**< Allocated capacity of the @c catalog array. */
 
   ClientRecord *clients; /**< Dynamic array of client records sorted by name. */
   int client_count;      /**< Number of client records stored. */
   int client_capacity;   /**< Allocated capacity of the @c clients array. */
 
-  BasketItem *basket;  /**< Dynamic array of current basket line items. */
-  int basket_count;    /**< Number of distinct products in the basket. */
-  int basket_capacity; /**< Allocated capacity of the @c basket array. */
+  BasketItem *basket;    /**< Dynamic array of current basket line items. */
+  int basket_count;      /**< Number of distinct products in the basket. */
+  int basket_capacity;   /**< Allocated capacity of the @c basket array. */
 
-  size_t memory_used; /**< Running total of heap bytes currently tracked. */
+  size_t memory_used;    /**< Running total of heap bytes currently tracked. */
 
   int next_invoice_id;    /**< Next invoice ID to assign; starts at 1. */
   int next_product_order; /**< Monotonic counter for product insertion order. */

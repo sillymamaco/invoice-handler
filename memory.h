@@ -22,8 +22,7 @@
  * Passing @c NULL for @p pointer is safe and has no effect.
  *
  * @param pointer Pointer to the block to free; ignored when @c NULL.
- * @param size    Byte count originally passed to safemalloc() or
- * safe_realloc().
+ * @param size    Byte count originally passed to safemalloc() or safe_realloc().
  * @param sys     System state whose @c memory_used counter is decremented.
  */
 void free_safe(void *pointer, size_t size, SystemState *sys);

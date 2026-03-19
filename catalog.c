@@ -4,12 +4,9 @@
  */
 
 #include "commands.h"
-#include "internal.h"
+#include "shared.h"
 #include "memory.h"
 #include "utils.h"
-
-/* ── stdin helper ───────────────────────────────────────────────────────────
- */
 
 void drain_line(void) {
   int c;
@@ -17,22 +14,16 @@ void drain_line(void) {
     ;
 }
 
-/* ── cmd_p helpers ──────────────────────────────────────────────────────────
- */
-
 int read_p_line(char *buf, int bufsz) {
   int c;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
     ;
-  if (c == '\n' || c == EOF)
-    return 0;
+  if (c == '\n' || c == EOF) return 0;
   int li = 0;
   buf[li++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF) {
-    if (c == '\r')
-      continue;
-    if (li < bufsz - 1)
-      buf[li++] = (char)c;
+    if (c == '\r') continue;
+    if (li < bufsz - 1) buf[li++] = (char)c;
   }
   buf[li] = '\0';
   return 1;
@@ -40,36 +31,30 @@ int read_p_line(char *buf, int bufsz) {
 
 char *extract_desc(const char *line, SystemState *sys) {
   const char *dp = line;
-  int skipped = 0;
+  int skipped    = 0;
   while (*dp && skipped < 4) {
-    while (*dp && isspace((unsigned char)*dp))
-      dp++;
-    while (*dp && !isspace((unsigned char)*dp))
-      dp++;
+    while (*dp && isspace((unsigned char)*dp)) dp++;
+    while (*dp && !isspace((unsigned char)*dp)) dp++;
     skipped++;
   }
-  while (*dp && isspace((unsigned char)*dp))
-    dp++;
-  if (!*dp)
-    return NULL;
+  while (*dp && isspace((unsigned char)*dp)) dp++;
+  if (!*dp) return NULL;
   int dlen = (int)strlen(dp);
-  while (dlen > 0 && isspace((unsigned char)dp[dlen - 1]))
-    dlen--;
-  if (dlen <= 0)
-    return NULL;
+  while (dlen > 0 && isspace((unsigned char)dp[dlen - 1])) dlen--;
+  if (dlen <= 0) return NULL;
   char *desc = safemalloc(dlen + 1, sys);
   memcpy(desc, dp, dlen);
   desc[dlen] = '\0';
   return desc;
 }
 
-void catalog_insert(SystemState *sys, const char *ean, char iva_c, double price,
-                    int stock, char *desc) {
+void catalog_insert(SystemState *sys, const char *ean, char iva_c,
+                    double price, int stock, char *desc) {
   if (sys->catalog_count == sys->catalog_capacity) {
     int nc = sys->catalog_capacity ? sys->catalog_capacity * 2 : 10;
-    sys->catalog =
-        safe_realloc(sys->catalog, sys->catalog_capacity * sizeof(Product),
-                     nc * sizeof(Product), sys);
+    sys->catalog = safe_realloc(sys->catalog,
+                                sys->catalog_capacity * sizeof(Product),
+                                nc * sizeof(Product), sys);
     sys->catalog_capacity = nc;
   }
   int i = sys->catalog_count - 1;
@@ -77,42 +62,43 @@ void catalog_insert(SystemState *sys, const char *ean, char iva_c, double price,
     sys->catalog[i + 1] = sys->catalog[i];
     i--;
   }
-  int idx = i + 1;
+  int idx                        = i + 1;
   strcpy(sys->catalog[idx].ean, ean);
-  sys->catalog[idx].iva_class = iva_c;
-  sys->catalog[idx].price = price;
-  sys->catalog[idx].stock = stock;
-  sys->catalog[idx].desc = desc;
-  sys->catalog[idx].sold = 0;
+  sys->catalog[idx].iva_class    = iva_c;
+  sys->catalog[idx].price        = price;
+  sys->catalog[idx].stock        = stock;
+  sys->catalog[idx].desc         = desc;
+  sys->catalog[idx].sold         = 0;
   sys->catalog[idx].insert_order = sys->next_product_order++;
   sys->catalog_count++;
 }
 
-int catalog_update(SystemState *sys, int idx, const char *ean, char iva_c,
-                   double price, int stock, char *desc) {
+int catalog_update(SystemState *sys, int idx, const char *ean,
+                   char iva_c, double price, int stock, char *desc) {
   for (int i = 0; i < sys->basket_count; i++) {
-    if (strcmp(sys->basket[i].ean, ean) == 0 && sys->basket[i].amount > 0 &&
+    if (strcmp(sys->basket[i].ean, ean) == 0 &&
+        sys->basket[i].amount > 0 &&
         sys->catalog[idx].price != price) {
       printf("product in use\n");
       return 0;
     }
   }
   sys->catalog[idx].iva_class = iva_c;
-  sys->catalog[idx].price = price;
-  sys->catalog[idx].stock += stock;
+  sys->catalog[idx].price     = price;
+  sys->catalog[idx].stock    += stock;
   free_safe(sys->catalog[idx].desc, strlen(sys->catalog[idx].desc) + 1, sys);
-  sys->catalog[idx].desc = desc;
+  sys->catalog[idx].desc      = desc;
   return 1;
 }
 
 int parse_p_fields(const char *linebuf, char ean[14], char *iva_c,
                    double *price, int *stock) {
-  char ean_raw[MAX_INSTRC_LENGTH] = {0};
-  char iva_str[MAX_INSTRC_LENGTH] = {0};
+  char ean_raw[MAX_INSTRC_LENGTH]   = {0};
+  char iva_str[MAX_INSTRC_LENGTH]   = {0};
   char price_str[MAX_INSTRC_LENGTH] = {0};
   char stock_str[MAX_INSTRC_LENGTH] = {0};
-  if (sscanf(linebuf, "%s %s %s %s", ean_raw, iva_str, price_str, stock_str) <
-      4)
+  if (sscanf(linebuf, "%s %s %s %s",
+             ean_raw, iva_str, price_str, stock_str) < 4)
     return 0;
 
   size_t rlen = strlen(ean_raw);
@@ -123,58 +109,35 @@ int parse_p_fields(const char *linebuf, char ean[14], char *iva_c,
   *iva_c = iva_str[0];
 
   char *pe = NULL;
-  *price = strtod(price_str, &pe);
-  if (pe == price_str || *pe != '\0')
-    *price = -1.0;
+  *price   = strtod(price_str, &pe);
+  if (pe == price_str || *pe != '\0') *price = -1.0;
 
   char *se = NULL;
-  long sl = strtol(stock_str, &se, 10);
-  *stock = (se == stock_str || *se != '\0') ? -1 : (int)sl;
+  long sl  = strtol(stock_str, &se, 10);
+  *stock   = (se == stock_str || *se != '\0') ? -1 : (int)sl;
 
-  if (iva_str[1] != '\0')
-    *iva_c = '\0'; /* multi-char IVA → invalid */
+  if (iva_str[1] != '\0') *iva_c = '\0';
   return 1;
 }
 
-/* ── cmd_l helpers ──────────────────────────────────────────────────────────
- */
+/* ── cmd_l quicksort by insert_order ─────────────────────────────────────── */
 
-/**
- * @brief Swap two @c Product* pointers in place.
- * @param a First pointer.
- * @param b Second pointer.
- */
+/** @brief Swap two Product* pointers in place. */
 static void swap_ordered(Product **a, Product **b) {
-  Product *t = *a;
-  *a = *b;
-  *b = t;
+  Product *t = *a; *a = *b; *b = t;
 }
 
-/**
- * @brief Lomuto partition step for the insertion-order quicksort.
- * @param arr Array of @c Product* pointers to partition.
- * @param lo  Left index (inclusive).
- * @param hi  Right index (inclusive, pivot).
- * @return Index of the pivot after partitioning.
- */
+/** @brief Lomuto partition for the insertion-order quicksort. */
 static int partition_ordered(Product **arr, int lo, int hi) {
   int pivot = arr[hi]->insert_order;
-  int i = lo - 1;
+  int i     = lo - 1;
   for (int j = lo; j < hi; j++)
-    if (arr[j]->insert_order < pivot) {
-      i++;
-      swap_ordered(&arr[i], &arr[j]);
-    }
+    if (arr[j]->insert_order < pivot) { i++; swap_ordered(&arr[i], &arr[j]); }
   swap_ordered(&arr[i + 1], &arr[hi]);
   return i + 1;
 }
 
-/**
- * @brief Recursively sort a @c Product* slice by insertion order.
- * @param arr Array of @c Product* pointers.
- * @param lo  Left index (inclusive).
- * @param hi  Right index (inclusive).
- */
+/** @brief Recursively sort a Product* slice by insert_order ascending. */
 static void quick_sort_ordered(Product **arr, int lo, int hi) {
   if (lo < hi) {
     int pi = partition_ordered(arr, lo, hi);
@@ -184,8 +147,7 @@ static void quick_sort_ordered(Product **arr, int lo, int hi) {
 }
 
 Product **build_ordered(SystemState *sys) {
-  if (sys->catalog_count == 0)
-    return NULL;
+  if (sys->catalog_count == 0) return NULL;
   Product **ordered = safemalloc(sys->catalog_count * sizeof(Product *), sys);
   for (int k = 0; k < sys->catalog_count; k++)
     ordered[k] = &sys->catalog[k];
@@ -215,12 +177,8 @@ int print_l_token(SystemState *sys, Product **ordered, const char *token) {
 void cmd_l_all(SystemState *sys, Product **ordered) {
   int found = 0;
   for (int i = 0; i < sys->catalog_count; i++)
-    if (ordered[i]->stock > 0) {
-      print_product(ordered[i]);
-      found = 1;
-    }
-  if (!found)
-    printf("*: no such product\n");
+    if (ordered[i]->stock > 0) { print_product(ordered[i]); found = 1; }
+  if (!found) printf("*: no such product\n");
 }
 
 void cmd_l_tokens(SystemState *sys, Product **ordered, char *buf) {
@@ -232,27 +190,23 @@ void cmd_l_tokens(SystemState *sys, Product **ordered, char *buf) {
   }
 }
 
-/* ── public command handlers: p, l, r ───────────────────────────────────────
- */
+/* ── public handlers ──────────────────────────────────────────────────────── */
 
 void cmd_p(SystemState *sys, Iva table[]) {
   char linebuf[MAX_INSTRC_LENGTH] = {0};
-  if (!read_p_line(linebuf, MAX_INSTRC_LENGTH))
-    return;
+  if (!read_p_line(linebuf, MAX_INSTRC_LENGTH)) return;
 
   char ean[14] = {0};
-  char iva_c = '\0';
+  char iva_c   = '\0';
   double price = 0.0;
-  int stock = 0;
-  if (!parse_p_fields(linebuf, ean, &iva_c, &price, &stock))
-    return;
+  int stock    = 0;
+  if (!parse_p_fields(linebuf, ean, &iva_c, &price, &stock)) return;
 
   int iva_ok = (iva_c != '\0') && iva_is_present(table, iva_c);
   char *desc = extract_desc(linebuf, sys);
 
   if (!validate_p_input(ean, iva_ok, price, stock, desc)) {
-    if (desc)
-      free_safe(desc, strlen(desc) + 1, sys);
+    if (desc) free_safe(desc, strlen(desc) + 1, sys);
     return;
   }
 
@@ -278,8 +232,7 @@ void cmd_l(SystemState *sys) {
 
   if (c == '\n' || c == EOF) {
     cmd_l_all(sys, ordered);
-    if (ordered)
-      free_safe(ordered, sys->catalog_count * sizeof(Product *), sys);
+    if (ordered) free_safe(ordered, sys->catalog_count * sizeof(Product *), sys);
     return;
   }
 
@@ -287,20 +240,15 @@ void cmd_l(SystemState *sys) {
   int i = 0, truncated = 0;
   buf[i++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF) {
-    if (c == '\r')
-      continue;
-    if (i < MAX_INSTRC_LENGTH - 1)
-      buf[i++] = (char)c;
-    else
-      truncated = 1;
+    if (c == '\r') continue;
+    if (i < MAX_INSTRC_LENGTH - 1) buf[i++] = (char)c;
+    else truncated = 1;
   }
-  if (truncated)
-    drain_line();
+  if (truncated) drain_line();
   buf[i] = '\0';
 
   cmd_l_tokens(sys, ordered, buf);
-  if (ordered)
-    free_safe(ordered, sys->catalog_count * sizeof(Product *), sys);
+  if (ordered) free_safe(ordered, sys->catalog_count * sizeof(Product *), sys);
 }
 
 void cmd_r(SystemState *sys, Iva table[]) {
@@ -321,11 +269,9 @@ void cmd_r(SystemState *sys, Iva table[]) {
   int ei = 0;
   ean[ei++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF && !isspace((unsigned char)c))
-    if (ei < 13)
-      ean[ei++] = (char)c;
+    if (ei < 13) ean[ei++] = (char)c;
   ean[ei] = '\0';
-  if (c != '\n' && c != EOF)
-    drain_line();
+  if (c != '\n' && c != EOF) drain_line();
 
   int cat_idx = find_product_idx(sys, ean);
   if (cat_idx == -1)

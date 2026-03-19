@@ -182,8 +182,8 @@ void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
  * @param[out] name_buf Caller-supplied buffer that receives the client name.
  * @param name_buf_size Size of @p name_buf in bytes.
  */
-void parse_invoice_client(const char *line, int *nif, char *name_buf,
-                          size_t name_buf_size);
+int parse_invoice_client(const char *line, int *nif, char *name_buf,
+                         size_t name_buf_size);
 
 /* ── Name comparison ─────────────────────────────────────────────────────── */
 

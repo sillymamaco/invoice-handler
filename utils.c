@@ -200,39 +200,44 @@ static void parse_nif(const char **ptr, int *nif) {
  * @return Non-zero on success, zero when the opening quote has no closing
  *         counterpart.
  */
-static int parse_name(const char *ptr, char *name_buf, size_t name_buf_size) {
+static int parse_name(const char **ptr_in, char *name_buf, size_t name_buf_size) {
+  const char *ptr = *ptr_in;
   name_buf[0] = '\0';
   if (*ptr == '"') {
     ptr++;
     const char *end = strchr(ptr, '"');
-    if (!end)
-      return 0; /* unclosed quote — signal invalidity */
+    if (!end) return 0; /* unclosed quote — signal invalidity */
     size_t len = (size_t)(end - ptr);
     if (len >= name_buf_size)
       len = name_buf_size - 1;
     memcpy(name_buf, ptr, len);
     name_buf[len] = '\0';
+    ptr = end + 1;
   } else {
     size_t i = 0;
     while (*ptr && !isspace((unsigned char)*ptr) && i < name_buf_size - 1)
       name_buf[i++] = *ptr++;
     name_buf[i] = '\0';
   }
+  *ptr_in = ptr;
   return 1;
 }
 
-void parse_invoice_client(const char *line, int *nif, char *name_buf,
-                          size_t name_buf_size) {
+int parse_invoice_client(const char *line, int *nif, char *name_buf,
+                         size_t name_buf_size) {
   const char *ptr = line;
   while (*ptr && isspace((unsigned char)*ptr))
     ptr++;
   parse_nif(&ptr, nif);
   while (*ptr && isspace((unsigned char)*ptr))
     ptr++;
-  if (*ptr)
-    parse_name(ptr, name_buf, name_buf_size);
+  if (*ptr) {
+    if (!parse_name(&ptr, name_buf, name_buf_size)) return 0;
+    while (*ptr && isspace((unsigned char)*ptr)) ptr++;
+    if (*ptr != '\0') return 0; /* Trailing garbage detected */
+  }
+  return 1;
 }
-
 int cmp_names(const char *a, const char *b) { return strcmp(a, b); }
 
 /**
