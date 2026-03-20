@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "shared.h"
 #include "utils.h"
+#include "common.h"
 
 int get_or_create_client(SystemState *sys, const char *name, int nif) {
   int idx = find_client_idx(sys, name);
@@ -42,7 +43,7 @@ int get_or_create_client(SystemState *sys, const char *name, int nif) {
 
 void finalize_invoice(SystemState *sys, Iva table[], int nif,
                       const char *name) {
-  double total = 0.0;
+  long long total_cents = 0;
   int items = 0;
 
   for (int i = 0; i < sys->basket_count; i++) {
@@ -50,9 +51,9 @@ void finalize_invoice(SystemState *sys, Iva table[], int nif,
     if (cat_idx != -1 && sys->basket[i].amount > 0) {
       items += sys->basket[i].amount;
       int iva = get_iva_rate(table, sys->catalog[cat_idx].iva_class);
-      total +=
-          round_money((sys->catalog[cat_idx].price * sys->basket[i].amount) *
-                      (1.0 + (iva / 100.0)));
+      double line = (sys->catalog[cat_idx].price * sys->basket[i].amount) *
+                    (1.0 + (iva / 100.0));
+      total_cents += (long long)(line * 100.0 + 0.500000001);
     }
   }
 
@@ -68,14 +69,14 @@ void finalize_invoice(SystemState *sys, Iva table[], int nif,
 
   Invoice *inv = &cr->invoices[cr->invoice_count++];
   inv->nif = nif;
-  inv->total = total;
+  inv->total_cents = total_cents;
   inv->id = sys->next_invoice_id++;
   inv->num_items = items;
 
   sys->global_items += items;
-  sys->global_sales += total;
+  sys->global_sales_cents += total_cents;
 
-  printf("%d %.2f %d\n", items, total, inv->id);
+  printf("%d %.2f %d\n", items, total_cents / 100.0, inv->id);
   sys->basket_count = 0;
 }
 
@@ -87,12 +88,11 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
         continue;
 
       Invoice *inv = &cr->invoices[ii];
-      printf("%.2f %d %s\n", inv->total, inv->nif, cr->name);
+      printf("%.2f %d %s\n", inv->total_cents / 100.0, inv->nif, cr->name);
 
       sys->global_items -= inv->num_items;
-      sys->global_sales -= inv->total;
-      if (sys->global_sales < 0.0)
-        sys->global_sales = 0.0;
+      sys->global_sales_cents -= inv->total_cents;
+      if (sys->global_sales_cents < 0) sys->global_sales_cents = 0;
 
       for (int k = ii; k < cr->invoice_count - 1; k++)
         cr->invoices[k] = cr->invoices[k + 1];
@@ -108,17 +108,18 @@ void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
 
   int cat_idx = find_product_idx(sys, ean);
   if (cat_idx == -1) { printf("%s: no such product\n", ean); return; }
-  if (qty <= 0 || qty > sys->catalog[cat_idx].stock) {
-    printf("invalid quantity\n");
-    return;
-  }
 
   int reserved = 0;
   for (int j = 0; j < sys->basket_count; j++)
-    if (strcmp(sys->basket[j].ean, ean) == 0) { reserved = sys->basket[j].amount; break; }
+    if (strcmp(sys->basket[j].ean, ean) == 0) {
+      reserved = sys->basket[j].amount;
+      break;
+    }
 
-  if (sys->catalog[cat_idx].stock - qty < reserved) {
-    printf("product in use\n");
+  if (reserved > 0) { printf("product in use\n"); return; }
+
+  if (qty <= 0 || qty > sys->catalog[cat_idx].stock) {
+    printf("invalid quantity\n");
     return;
   }
 

@@ -9,9 +9,6 @@
 #include "shared.h"
 #include "utils.h"
 
-/* max amount of product stock*/
-#define MAX_PRODUCT 10000 
-
 void drain_line(void) {
   int c;
   while ((c = getchar()) != '\n' && c != EOF)
@@ -254,7 +251,7 @@ void cmd_p(SystemState *sys, Iva table[]) {
       return;
     }
   } else {
-    if (sys->catalog_count >= MAX_PRODUCT) {
+    if (sys->catalog_count >= 10000) {
       printf("invalid product\n");
       free_safe(desc, strlen(desc) + 1, sys);
       return;
@@ -306,7 +303,7 @@ void cmd_r(SystemState *sys, Iva table[]) {
 
   if (c == '\n' || c == EOF) {
     printf("%d %d %.2f\n", sys->global_items, sys->next_invoice_id - 1,
-           sys->global_sales);
+           sys->global_sales_cents / 100.0);
     for (int i = 0; i < IVA_TABLE_SIZE; i++)
       if (table[i].present)
         printf("%c %d%%\n", (char)('A' + i), table[i].value);

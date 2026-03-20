@@ -131,8 +131,7 @@ int validate_p_input(const char *ean, int iva_ok, double price, int stock,
 }
 
 double round_money(double val) {
-  /* imma be honest, by trial and error */
-  return (long long)(val * 100.0 + 0.51) / 100.0;
+  return (long long)(val * 100.0 + 0.500000001) / 100.0;
 }
 
 int match(const char *pattern, const char *text) {

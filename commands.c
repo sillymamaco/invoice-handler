@@ -105,8 +105,8 @@ static int parse_c_name(SystemState *sys, char *name) {
  *  Format: "<id> <total> <client-name>" */
 static void print_client_invoices(const ClientRecord *cr) {
   for (int ii = 0; ii < cr->invoice_count; ii++)
-    printf("%d %.2f %s\n", cr->invoices[ii].id, cr->invoices[ii].total,
-           cr->name);
+    printf("%d %.2f %s\n", cr->invoices[ii].id,
+           cr->invoices[ii].total_cents / 100.0, cr->name);
 }
 
 void cmd_a(SystemState *sys, Iva table[]) {

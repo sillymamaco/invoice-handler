@@ -60,7 +60,7 @@ typedef struct {
  * FIFO pile of invoices, ensuring they are in chronological order.
  */
 typedef struct {
-  double total;  /**< Total value including IVA. */
+  long long total_cents;  /**< Total value including IVA. */
   int nif;       /**< Client NIF (tax identification number). */
   int id;        /**< Number in the order of invoice creation. */
   int num_items; /**< Number of product units covered by this invoice. */
@@ -117,7 +117,7 @@ typedef struct {
   int next_invoice_id;    /**< Next invoice ID to assign; starts at 1. */
   int next_product_order; /**< Counter of product insertion order.*/
   int global_items;       /**< Total item count across all live invoices. */
-  double global_sales;    /**< Total revenue across all live invoices. */
+  long long global_sales_cents;    /**< Total revenue across all live invoices. */
 } SystemState;
 
 #endif /* COMMON_H */
