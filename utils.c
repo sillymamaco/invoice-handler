@@ -1,8 +1,10 @@
 /**
  * @file utils.c
+ * @author IST1117890 (Irina Cojocari)
  * @brief Utility functions: input, validation, math, output, and parsing.
  */
 
+// TODO use drainline from shared.h
 #include "utils.h"
 #include "memory.h"
 
@@ -10,13 +12,14 @@ char *read_token_safe(SystemState *sys) {
   char buf[MAX_INSTRC_LENGTH] = {0};
   int c, i = 0, truncated = 0;
 
-  /* Skip leading whitespace but stop at newline. */
+  /* Skip leading whitespace but stop at newline so as to not miss other
+  commands. */
   while ((c = getchar()) != '\n' && c != EOF && isspace((unsigned char)c))
     ;
   if (c != '\n' && c != EOF) {
     buf[i++] = (char)c;
     while ((c = getchar()) != '\n' && c != EOF) {
-      if (c == '\r')
+      if (c == '\r') /* return char */
         continue;
       if (i < MAX_INSTRC_LENGTH - 1)
         buf[i++] = (char)c;
@@ -33,6 +36,7 @@ char *read_token_safe(SystemState *sys) {
   buf[i] = '\0';
   if (i == 0)
     return NULL;
+  /* save the string */
   char *res = safemalloc(i + 1, sys);
   strcpy(res, buf);
   return res;
@@ -47,6 +51,7 @@ int find_product_idx(SystemState *sys, const char *ean) {
     return -1;
   Product *p = bsearch(ean, sys->catalog, sys->catalog_count, sizeof(Product),
                        cmp_product_search);
+  /* if found, pointer - start = index */
   return p ? (int)(p - sys->catalog) : -1;
 }
 
@@ -73,6 +78,7 @@ int validate_ean(const char *ean) {
   int len = (int)strlen(ean);
   if (len != 8 && len != 13)
     return 0;
+  /* separated loops to ensure the last digit is validated before checking */
   for (int i = 0; i < len; i++)
     if (!isdigit((unsigned char)ean[i]))
       return 0;
@@ -126,6 +132,7 @@ int validate_p_input(const char *ean, int iva_ok, double price, int stock,
 }
 
 double round_money(double val) {
+  /* imma be honest, by trial and error */
   return (long long)(val * 100.0 + 0.500000001) / 100.0;
 }
 
@@ -138,8 +145,9 @@ int match(const char *pattern, const char *text) {
     } else if (*pattern == '*') {
       star = pattern++;
       ts = text;
+      /* if doesnt match but we have a star "to spare" */
     } else if (star) {
-      pattern = star + 1;
+      pattern = star + 1; /* go back */
       text = ++ts;
     } else
       return 0;
@@ -164,16 +172,16 @@ void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
 }
 
 /**
- * @brief Parse a leading NIF from @p *ptr and advance past it.
+ * @brief Parse a leading NIF from *ptr and advance past it.
  *
  * @details The digit run is treated as a NIF only when it is followed by
- * whitespace or end-of-string. A leading @c '0' sets @c *nif to @c 0 (so
- * the out-of-range check in @c cmd_f fires) without discarding the raw
- * string that the caller preserves for the error message.
+ * whitespace or end-of-string. A leading '0' sets *nif to  0 (so
+ * the out-of-range check in cmd_f fires) without discarding the raw
+ * string that is preserved for the error message.
  *
- * @param[in,out] ptr Pointer to the current parse position; advanced past
+ * @param Pointer to the current parse position; advanced past
  *                    the NIF on success.
- * @param[out]    nif Receives the parsed NIF value.
+ * @param Receives the parsed NIF value.
  */
 static void parse_nif(const char **ptr, int *nif) {
   if (!isdigit((unsigned char)**ptr))
@@ -188,25 +196,27 @@ static void parse_nif(const char **ptr, int *nif) {
 }
 
 /**
- * @brief Copy the name token starting at @p ptr into @p name_buf.
+ * @brief Copy the name token starting at ptr into name_buf.
  *
  * @details Handles both quoted (white-space-containing) and unquoted names.
- * An unclosed quote leaves @p name_buf empty as an invalidity signal to the
+ * An unclosed quote leaves name_buf empty as an invalidity signal to the
  * caller.
  *
- * @param ptr          Parse position pointing at the first name character.
- * @param name_buf     Caller-supplied destination buffer.
- * @param name_buf_size Size of @p name_buf in bytes.
+ * @param Parse position pointing at the first name character.
+ * @param Caller-supplied destination buffer.
+ * @param Size of name_buf in bytes.
  * @return Non-zero on success, zero when the opening quote has no closing
  *         counterpart.
  */
-static int parse_name(const char **ptr_in, char *name_buf, size_t name_buf_size) {
+static int parse_name(const char **ptr_in, char *name_buf,
+                      size_t name_buf_size) {
   const char *ptr = *ptr_in;
   name_buf[0] = '\0';
   if (*ptr == '"') {
     ptr++;
     const char *end = strchr(ptr, '"');
-    if (!end) return 0; /* unclosed quote — signal invalidity */
+    if (!end)
+      return 0; /* unclosed quote — signal invalidity */
     size_t len = (size_t)(end - ptr);
     if (len >= name_buf_size)
       len = name_buf_size - 1;
@@ -232,18 +242,21 @@ int parse_invoice_client(const char *line, int *nif, char *name_buf,
   while (*ptr && isspace((unsigned char)*ptr))
     ptr++;
   if (*ptr) {
-    if (!parse_name(&ptr, name_buf, name_buf_size)) return 0;
-    while (*ptr && isspace((unsigned char)*ptr)) ptr++;
-    if (*ptr != '\0') return 0; /* Trailing garbage detected */
+    if (!parse_name(&ptr, name_buf, name_buf_size))
+      return 0;
+    while (*ptr && isspace((unsigned char)*ptr))
+      ptr++;
+    if (*ptr != '\0')
+      return 0; /* Trailing garbage detected */
   }
   return 1;
 }
 int cmp_names(const char *a, const char *b) { return strcmp(a, b); }
 
 /**
- * @brief @c bsearch comparator: name key vs ::ClientRecord element.
- * @param key  Pointer to a @c const @c char* name string.
- * @param elem Pointer to a ::ClientRecord entry.
+ * @brief bsearch comparator: name key vs ClientRecord element.
+ * @param Pointer to a const char* name string.
+ * @param Pointer to a ClientRecord entry.
  * @return Result of cmp_names() on the two name strings.
  */
 static int cmp_client_search(const void *key, const void *elem) {
@@ -255,5 +268,6 @@ int find_client_idx(SystemState *sys, const char *name) {
     return -1;
   ClientRecord *cr = bsearch(name, sys->clients, sys->client_count,
                              sizeof(ClientRecord), cmp_client_search);
+  /* index = client pointer - start */
   return cr ? (int)(cr - sys->clients) : -1;
 }

@@ -1,5 +1,6 @@
 /**
  * @file memory.c
+ * @author IST1117890 (Irina Cojocari)
  * @brief Tracked memory management: allocation, resizing, and cleanup.
  */
 

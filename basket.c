@@ -4,8 +4,8 @@
  */
 
 #include "commands.h"
-#include "shared.h"
 #include "memory.h"
+#include "shared.h"
 #include "utils.h"
 
 void cancel_basket(SystemState *sys) {
@@ -13,8 +13,9 @@ void cancel_basket(SystemState *sys) {
     int idx = find_product_idx(sys, sys->basket[i].ean);
     if (idx != -1) {
       sys->catalog[idx].stock += sys->basket[i].amount;
-      sys->catalog[idx].sold  -= sys->basket[i].amount;
-      if (sys->catalog[idx].sold < 0) sys->catalog[idx].sold = 0;
+      sys->catalog[idx].sold -= sys->basket[i].amount;
+      if (sys->catalog[idx].sold < 0)
+        sys->catalog[idx].sold = 0;
     }
   }
   sys->basket_count = 0;
@@ -22,7 +23,9 @@ void cancel_basket(SystemState *sys) {
 
 /** @brief Swap two BasketItem entries in place. */
 static void swap_basket(BasketItem *a, BasketItem *b) {
-  BasketItem t = *a; *a = *b; *b = t;
+  BasketItem t = *a;
+  *a = *b;
+  *b = t;
 }
 
 /** @brief Lomuto partition for the basket quicksort, pivoting on EAN. */
@@ -30,7 +33,10 @@ static int partition_basket(BasketItem *arr, int lo, int hi) {
   char *pivot = arr[hi].ean;
   int i = lo - 1;
   for (int j = lo; j < hi; j++)
-    if (strcmp(arr[j].ean, pivot) < 0) { i++; swap_basket(&arr[i], &arr[j]); }
+    if (strcmp(arr[j].ean, pivot) < 0) {
+      i++;
+      swap_basket(&arr[i], &arr[j]);
+    }
   swap_basket(&arr[i + 1], &arr[hi]);
   return i + 1;
 }
@@ -56,16 +62,23 @@ void print_sorted_basket(SystemState *sys, Iva table[]) {
 
 void process_basket_add(SystemState *sys, Iva table[], const char *ean,
                         int qty) {
-  if (qty == 0) return;
+  if (qty == 0)
+    return;
 
   int cat_idx = find_product_idx(sys, ean);
-  if (cat_idx == -1) { printf("%s: no such product\n", ean); return; }
+  if (cat_idx == -1) {
+    printf("%s: no such product\n", ean);
+    return;
+  }
 
   int basket_idx = -1;
   for (int j = 0; j < sys->basket_count; j++)
-    if (strcmp(sys->basket[j].ean, ean) == 0) { basket_idx = j; break; }
+    if (strcmp(sys->basket[j].ean, ean) == 0) {
+      basket_idx = j;
+      break;
+    }
 
-  int current    = (basket_idx != -1) ? sys->basket[basket_idx].amount : 0;
+  int current = (basket_idx != -1) ? sys->basket[basket_idx].amount : 0;
   int new_amount = current + qty;
 
   if (new_amount < 0 || (qty > 0 && qty > sys->catalog[cat_idx].stock)) {
@@ -74,7 +87,7 @@ void process_basket_add(SystemState *sys, Iva table[], const char *ean,
   }
 
   sys->catalog[cat_idx].stock -= qty;
-  sys->catalog[cat_idx].sold  += qty;
+  sys->catalog[cat_idx].sold += qty;
 
   if (basket_idx != -1) {
     sys->basket[basket_idx].amount = new_amount;
@@ -85,9 +98,9 @@ void process_basket_add(SystemState *sys, Iva table[], const char *ean,
 
   if (sys->basket_count == sys->basket_capacity) {
     int nc = sys->basket_capacity ? sys->basket_capacity * 2 : 10;
-    sys->basket = safe_realloc(sys->basket,
-                               sys->basket_capacity * sizeof(BasketItem),
-                               nc * sizeof(BasketItem), sys);
+    sys->basket =
+        safe_realloc(sys->basket, sys->basket_capacity * sizeof(BasketItem),
+                     nc * sizeof(BasketItem), sys);
     sys->basket_capacity = nc;
   }
   basket_idx = sys->basket_count++;
