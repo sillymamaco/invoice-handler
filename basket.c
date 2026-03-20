@@ -62,23 +62,18 @@ void print_sorted_basket(SystemState *sys, Iva table[]) {
 
 void process_basket_add(SystemState *sys, Iva table[], const char *ean,
                         int qty) {
-  if (qty == 0)
-    return;
+  if (qty == 0) return;
+
+  if (!validate_ean(ean)) { printf("invalid ean\n"); return; }
 
   int cat_idx = find_product_idx(sys, ean);
-  if (cat_idx == -1) {
-    printf("%s: no such product\n", ean);
-    return;
-  }
+  if (cat_idx == -1) { printf("%s: no such product\n", ean); return; }
 
   int basket_idx = -1;
   for (int j = 0; j < sys->basket_count; j++)
-    if (strcmp(sys->basket[j].ean, ean) == 0) {
-      basket_idx = j;
-      break;
-    }
+    if (strcmp(sys->basket[j].ean, ean) == 0) { basket_idx = j; break; }
 
-  int current = (basket_idx != -1) ? sys->basket[basket_idx].amount : 0;
+  int current    = (basket_idx != -1) ? sys->basket[basket_idx].amount : 0;
   int new_amount = current + qty;
 
   if (new_amount < 0 || (qty > 0 && qty > sys->catalog[cat_idx].stock)) {
@@ -87,20 +82,19 @@ void process_basket_add(SystemState *sys, Iva table[], const char *ean,
   }
 
   sys->catalog[cat_idx].stock -= qty;
-  sys->catalog[cat_idx].sold += qty;
+  sys->catalog[cat_idx].sold  += qty;
 
   if (basket_idx != -1) {
     sys->basket[basket_idx].amount = new_amount;
-    /* Keep zero-qty slots so the product-in-use guard in cmd_p still fires. */
     print_basket_item(sys, table, cat_idx, new_amount);
     return;
   }
 
   if (sys->basket_count == sys->basket_capacity) {
     int nc = sys->basket_capacity ? sys->basket_capacity * 2 : 10;
-    sys->basket =
-        safe_realloc(sys->basket, sys->basket_capacity * sizeof(BasketItem),
-                     nc * sizeof(BasketItem), sys);
+    sys->basket = safe_realloc(sys->basket,
+                               sys->basket_capacity * sizeof(BasketItem),
+                               nc * sizeof(BasketItem), sys);
     sys->basket_capacity = nc;
   }
   basket_idx = sys->basket_count++;

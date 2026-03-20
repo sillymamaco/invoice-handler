@@ -210,28 +210,25 @@ void cmd_d(SystemState *sys) {
   int c;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
     ;
-  if (c == '\n' || c == EOF)
-    return;
+  if (c == '\n' || c == EOF) return;
 
   char buf[MAX_INSTRC_LENGTH] = {0};
   int i = 0, truncated = 0;
   buf[i++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF) {
-    if (c == '\r')
-      continue;
-    if (i < MAX_INSTRC_LENGTH - 1)
-      buf[i++] = (char)c;
-    else
-      truncated = 1;
+    if (c == '\r') continue;
+    if (i < MAX_INSTRC_LENGTH - 1) buf[i++] = (char)c;
+    else truncated = 1;
   }
-  if (truncated)
-    drain_line();
+  if (truncated) drain_line();
   buf[i] = '\0';
 
   char arg1[BUFFER_LIMIT], arg2[BUFFER_LIMIT];
   int n = sscanf(buf, "%1023s %1023s", arg1, arg2);
   if (n == 1)
     cmd_d_delete_inv(sys, atoi(arg1));
-  else if (n == 2)
-    cmd_d_reduce_stock(sys, arg1, atoi(arg2));
+  else if (n == 2) {
+    if (strlen(arg1) > 13) printf("invalid ean\n");
+    else cmd_d_reduce_stock(sys, arg1, atoi(arg2));
+  }
 }

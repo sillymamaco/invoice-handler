@@ -104,11 +104,10 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
 }
 
 void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
+  if (!validate_ean(ean)) { printf("invalid ean\n"); return; }
+
   int cat_idx = find_product_idx(sys, ean);
-  if (cat_idx == -1) {
-    printf("%s: no such product\n", ean);
-    return;
-  }
+  if (cat_idx == -1) { printf("%s: no such product\n", ean); return; }
   if (qty <= 0 || qty > sys->catalog[cat_idx].stock) {
     printf("invalid quantity\n");
     return;
@@ -116,10 +115,7 @@ void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
 
   int reserved = 0;
   for (int j = 0; j < sys->basket_count; j++)
-    if (strcmp(sys->basket[j].ean, ean) == 0) {
-      reserved = sys->basket[j].amount;
-      break;
-    }
+    if (strcmp(sys->basket[j].ean, ean) == 0) { reserved = sys->basket[j].amount; break; }
 
   if (sys->catalog[cat_idx].stock - qty < reserved) {
     printf("product in use\n");

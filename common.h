@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief Maximum heap memory the program may use (64 MiB). */
-#define MAX_MEMORY_ALLOCATED (64 * 1024 * 1024)
+/** @brief Maximum heap memory the program may use (10 MiB). */
+#define MAX_MEMORY_ALLOCATED (10 * 1024 * 1024)
 
 /** @brief Maximum length of a single input line in bytes (64 KiB). */
 #define MAX_INSTRC_LENGTH 65535
