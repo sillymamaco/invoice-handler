@@ -7,38 +7,91 @@
 #include "utils.h"
 #include "memory.h"
 
+void fill_buffer_from_stdin(char *buf, int *i, int *truncated) {
+  int c;
+  while ((c = getchar()) != '\n' && c != EOF) {
+    if (c == '\r')
+      continue;
+    if (*i < MAX_INSTRC_LENGTH - 1)
+      buf[(*i)++] = (char)c;
+    else
+      *truncated = 1;
+  }
+}
+
+int read_line_to_buffer(char *buf, size_t limit) {
+  int c;
+  int i = 0, truncated = 0;
+  while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
+    ;
+  if (c == '\n' || c == EOF)
+    return 0;
+
+  buf[i++] = (char)c;
+  while ((c = getchar()) != '\n' && c != EOF) {
+    if (c == '\r')
+      continue;
+    if (i < (int)limit - 1)
+      buf[i++] = (char)c;
+    else
+      truncated = 1;
+  }
+  if (truncated) {
+    while ((c = getchar()) != '\n' && c != EOF)
+      ;
+  }
+  buf[i] = '\0';
+  return truncated;
+}
+
 char *read_token_safe(SystemState *sys) {
   char buf[MAX_INSTRC_LENGTH] = {0};
   int c, i = 0, truncated = 0;
 
-  /* Skip leading whitespace but stop at newline so as to not miss other
-  commands. */
   while ((c = getchar()) != '\n' && c != EOF && isspace((unsigned char)c))
     ;
   if (c != '\n' && c != EOF) {
     buf[i++] = (char)c;
-    while ((c = getchar()) != '\n' && c != EOF) {
-      if (c == '\r') /* return char */
-        continue;
-      if (i < MAX_INSTRC_LENGTH - 1)
-        buf[i++] = (char)c;
-      else
-        truncated = 1; /* keep reading to drain the line */
-    }
+    fill_buffer_from_stdin(buf, &i, &truncated);
   }
-  if (truncated) /* Get rid of trash */
+  if (truncated) {
     while ((c = getchar()) != '\n' && c != EOF)
       ;
-  /* Strip trailing whitespace. */
+  }
   while (i > 0 && isspace((unsigned char)buf[i - 1]))
     i--;
   buf[i] = '\0';
+
   if (i == 0)
     return NULL;
-  /* save the string */
   char *res = safemalloc(i + 1, sys);
   strcpy(res, buf);
   return res;
+}
+
+int extract_quoted_string(const char **ptr, char *name_buf,
+                          size_t name_buf_size) {
+  const char *p = *ptr;
+  name_buf[0] = '\0';
+  if (*p == '"') {
+    p++;
+    const char *end = strchr(p, '"');
+    if (!end)
+      return 0;
+    size_t len = (size_t)(end - p);
+    if (len >= name_buf_size)
+      len = name_buf_size - 1;
+    memcpy(name_buf, p, len);
+    name_buf[len] = '\0';
+    p = end + 1;
+  } else {
+    size_t i = 0;
+    while (*p && !isspace((unsigned char)*p) && i < name_buf_size - 1)
+      name_buf[i++] = *p++;
+    name_buf[i] = '\0';
+  }
+  *ptr = p;
+  return 1;
 }
 
 int cmp_product_search(const void *key, const void *elem) {
@@ -50,7 +103,6 @@ int find_product_idx(SystemState *sys, const char *ean) {
     return -1;
   Product *p = bsearch(ean, sys->catalog, sys->catalog_count, sizeof(Product),
                        cmp_product_search);
-  /* if found, pointer - start = index */
   return p ? (int)(p - sys->catalog) : -1;
 }
 
@@ -77,10 +129,10 @@ int validate_ean(const char *ean) {
   int len = (int)strlen(ean);
   if (len != 8 && len != 13)
     return 0;
-  /* separated loops to ensure the last digit is validated before checking */
-  for (int i = 0; i < len; i++)
+  for (int i = 0; i < len; i++) {
     if (!isdigit((unsigned char)ean[i]))
       return 0;
+  }
   int sum = 0;
   for (int i = 0; i < len - 1; i++) {
     int val = ean[i] - '0';
@@ -143,12 +195,12 @@ int match(const char *pattern, const char *text) {
     } else if (*pattern == '*') {
       star = pattern++;
       ts = text;
-      /* if doesnt match but we have a star "to spare" */
     } else if (star) {
-      pattern = star + 1; /* go back */
+      pattern = star + 1;
       text = ++ts;
-    } else
+    } else {
       return 0;
+    }
   }
   while (*pattern == '*')
     pattern++;
@@ -164,99 +216,16 @@ void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
                        int qty) {
   double price = sys->catalog[cat_idx].price;
   int iva = get_iva_rate(table, sys->catalog[cat_idx].iva_class);
-  double total = round_money((price * qty) * (1.0 + (iva / 100.0)));
+  long long price_cents = (long long)(price * 100.0 + 0.5);
+  long long numerator = price_cents * qty * (100 + iva);
+  long long total_cents = (numerator + 50) / 100;
+
   printf("%c %.2f %d %.2f %s\n", sys->catalog[cat_idx].iva_class, price, qty,
-         total, sys->catalog[cat_idx].desc);
+         total_cents / 100.0, sys->catalog[cat_idx].desc);
 }
 
-/**
- * @brief Parse a leading NIF from *ptr and advance past it.
- *
- * @details The digit run is treated as a NIF only when it is followed by
- * whitespace or end-of-string. A leading '0' sets *nif to  0 (so
- * the out-of-range check in cmd_f fires) without discarding the raw
- * string that is preserved for the error message.
- *
- * @param Pointer to the current parse position; advanced past
- *                    the NIF on success.
- * @param Receives the parsed NIF value.
- */
-static void parse_nif(const char **ptr, int *nif) {
-  if (!isdigit((unsigned char)**ptr))
-    return;
-  const char *tmp = *ptr;
-  while (*tmp && isdigit((unsigned char)*tmp))
-    tmp++;
-  if (*tmp != '\0' && !isspace((unsigned char)*tmp))
-    return;
-  *nif = (**ptr == '0') ? 0 : (sscanf(*ptr, "%d", nif), *nif);
-  *ptr = tmp;
-}
-
-/**
- * @brief Copy the name token starting at ptr into name_buf.
- *
- * @details Handles both quoted (white-space-containing) and unquoted names.
- * An unclosed quote leaves name_buf empty as an invalidity signal to the
- * caller.
- *
- * @param Parse position pointing at the first name character.
- * @param Caller-supplied destination buffer.
- * @param Size of name_buf in bytes.
- * @return Non-zero on success, zero when the opening quote has no closing
- *         counterpart.
- */
-static int parse_name(const char **ptr_in, char *name_buf,
-                      size_t name_buf_size) {
-  const char *ptr = *ptr_in;
-  name_buf[0] = '\0';
-  if (*ptr == '"') {
-    ptr++;
-    const char *end = strchr(ptr, '"');
-    if (!end)
-      return 0; /* unclosed quote — signal invalidity */
-    size_t len = (size_t)(end - ptr);
-    if (len >= name_buf_size)
-      len = name_buf_size - 1;
-    memcpy(name_buf, ptr, len);
-    name_buf[len] = '\0';
-    ptr = end + 1;
-  } else {
-    size_t i = 0;
-    while (*ptr && !isspace((unsigned char)*ptr) && i < name_buf_size - 1)
-      name_buf[i++] = *ptr++;
-    name_buf[i] = '\0';
-  }
-  *ptr_in = ptr;
-  return 1;
-}
-
-int parse_invoice_client(const char *line, int *nif, char *name_buf,
-                         size_t name_buf_size) {
-  const char *ptr = line;
-  while (*ptr && isspace((unsigned char)*ptr))
-    ptr++;
-  parse_nif(&ptr, nif);
-  while (*ptr && isspace((unsigned char)*ptr))
-    ptr++;
-  if (*ptr) {
-    if (!parse_name(&ptr, name_buf, name_buf_size))
-      return 0;
-    while (*ptr && isspace((unsigned char)*ptr))
-      ptr++;
-    if (*ptr != '\0')
-      return 0; /* Trailing garbage detected */
-  }
-  return 1;
-}
 int cmp_names(const char *a, const char *b) { return strcmp(a, b); }
 
-/**
- * @brief bsearch comparator: name key vs ClientRecord element.
- * @param Pointer to a const char* name string.
- * @param Pointer to a ClientRecord entry.
- * @return Result of cmp_names() on the two name strings.
- */
 static int cmp_client_search(const void *key, const void *elem) {
   return cmp_names((const char *)key, ((const ClientRecord *)elem)->name);
 }
@@ -266,6 +235,5 @@ int find_client_idx(SystemState *sys, const char *name) {
     return -1;
   ClientRecord *cr = bsearch(name, sys->clients, sys->client_count,
                              sizeof(ClientRecord), cmp_client_search);
-  /* index = client pointer - start */
   return cr ? (int)(cr - sys->clients) : -1;
 }

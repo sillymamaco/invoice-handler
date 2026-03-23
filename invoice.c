@@ -1,14 +1,14 @@
 /**
  * @file invoice.c
- * @brief Client record management and invoice creation, deletion, and stock
- * reduction for the d command.
+ * @author IST1117890 (Irina Cojocari)
+ * @brief Client record management and invoice operations.
  */
 
 #include "commands.h"
+#include "common.h"
 #include "memory.h"
 #include "shared.h"
 #include "utils.h"
-#include "common.h"
 
 int get_or_create_client(SystemState *sys, const char *name, int nif) {
   int idx = find_client_idx(sys, name);
@@ -41,21 +41,34 @@ int get_or_create_client(SystemState *sys, const char *name, int nif) {
   return idx;
 }
 
+/**
+ * @brief Accumulate total basket value and item count.
+ * @param sys System state.
+ * @param table IVA table.
+ * @param total_cents Pointer to store total price.
+ * @param items Pointer to store total item count.
+ */
+static void calculate_basket_totals(SystemState *sys, Iva table[],
+                                    long long *total_cents, int *items) {
+  for (int i = 0; i < sys->basket_count; i++) {
+    int cat_idx = find_product_idx(sys, sys->basket[i].ean);
+    if (cat_idx != -1 && sys->basket[i].amount > 0) {
+      *items += sys->basket[i].amount;
+      int iva = get_iva_rate(table, sys->catalog[cat_idx].iva_class);
+      long long price_cents =
+          (long long)(sys->catalog[cat_idx].price * 100.0 + 0.5);
+      long long numerator = price_cents * sys->basket[i].amount * (100 + iva);
+      *total_cents += (numerator + 50) / 100;
+    }
+  }
+}
+
 void finalize_invoice(SystemState *sys, Iva table[], int nif,
                       const char *name) {
   long long total_cents = 0;
   int items = 0;
 
-  for (int i = 0; i < sys->basket_count; i++) {
-    int cat_idx = find_product_idx(sys, sys->basket[i].ean);
-    if (cat_idx != -1 && sys->basket[i].amount > 0) {
-      items += sys->basket[i].amount;
-      int iva = get_iva_rate(table, sys->catalog[cat_idx].iva_class);
-      double line = (sys->catalog[cat_idx].price * sys->basket[i].amount) *
-                    (1.0 + (iva / 100.0));
-      total_cents += (long long)(line * 100.0 + 0.500000001);
-    }
-  }
+  calculate_basket_totals(sys, table, &total_cents, &items);
 
   int ci = get_or_create_client(sys, name, nif);
   ClientRecord *cr = &sys->clients[ci];
@@ -92,7 +105,8 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
 
       sys->global_items -= inv->num_items;
       sys->global_sales_cents -= inv->total_cents;
-      if (sys->global_sales_cents < 0) sys->global_sales_cents = 0;
+      if (sys->global_sales_cents < 0)
+        sys->global_sales_cents = 0;
 
       for (int k = ii; k < cr->invoice_count - 1; k++)
         cr->invoices[k] = cr->invoices[k + 1];
@@ -103,21 +117,35 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
   printf("%d: no such invoice\n", inv_id);
 }
 
+/**
+ * @brief Check if an item is reserved in the basket.
+ * @param sys System state.
+ * @param ean EAN string.
+ * @return Reserved quantity or 0.
+ */
+static int get_basket_reserved_qty(SystemState *sys, const char *ean) {
+  for (int j = 0; j < sys->basket_count; j++) {
+    if (strcmp(sys->basket[j].ean, ean) == 0)
+      return sys->basket[j].amount;
+  }
+  return 0;
+}
+
 void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
-  if (!validate_ean(ean)) { printf("invalid ean\n"); return; }
-
+  if (!validate_ean(ean)) {
+    printf("invalid ean\n");
+    return;
+  }
   int cat_idx = find_product_idx(sys, ean);
-  if (cat_idx == -1) { printf("%s: no such product\n", ean); return; }
+  if (cat_idx == -1) {
+    printf("%s: no such product\n", ean);
+    return;
+  }
 
-  int reserved = 0;
-  for (int j = 0; j < sys->basket_count; j++)
-    if (strcmp(sys->basket[j].ean, ean) == 0) {
-      reserved = sys->basket[j].amount;
-      break;
-    }
-
-  if (reserved > 0) { printf("product in use\n"); return; }
-
+  if (get_basket_reserved_qty(sys, ean) > 0) {
+    printf("product in use\n");
+    return;
+  }
   if (qty <= 0 || qty > sys->catalog[cat_idx].stock) {
     printf("invalid quantity\n");
     return;

@@ -1,7 +1,7 @@
 /**
  * @file main.c
- * @brief Program entry point: IVA table initialisation and command dispatch.
  * @author IST1117890 (Irina Cojocari)
+ * @brief Program entry point.
  */
 
 #include "commands.h"
@@ -10,18 +10,13 @@
 #include "utils.h"
 
 /**
- * @brief Initialise the system and run the command dispatch loop.
- *
+ * @brief Initialize the IVA table from arguments or defaults.
  * @param argc Argument count.
- * @param argv Argument vector; argv[1], when present, is the IVA file path.
- * @return 0 on normal termination.
+ * @param argv Argument vector.
+ * @param iva_table Array to initialize.
  */
-int main(int argc, char *argv[]) {
-  SystemState sys = {0};
-  sys.next_invoice_id = 1;
-  Iva iva_table[IVA_TABLE_SIZE] = {{0, 0}};
+static void init_iva_table(int argc, char *argv[], Iva iva_table[]) {
   if (argc == 1) {
-    /* Default IVA rates when no configuration file is supplied. */
     iva_set(iva_table, 'A', 0);
     iva_set(iva_table, 'B', 6);
     iva_set(iva_table, 'C', 13);
@@ -40,6 +35,21 @@ int main(int argc, char *argv[]) {
       fclose(f);
     }
   }
+}
+
+/**
+ * @brief Initialise the system and run the command dispatch loop.
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ * @return 0 on normal termination.
+ */
+int main(int argc, char *argv[]) {
+  SystemState sys = {0};
+  sys.next_invoice_id = 1;
+  Iva iva_table[IVA_TABLE_SIZE] = {{0, 0}};
+
+  init_iva_table(argc, argv, iva_table);
+
   int command;
   while ((command = getchar()) != EOF) {
     if (isspace(command))
@@ -70,10 +80,10 @@ int main(int argc, char *argv[]) {
       cmd_d(&sys);
       break;
     default:
-      break; /* Unknown commands are silently ignored. */
+      break;
     }
   }
-  /* No memory leaks round here */
+
   clean_all(&sys);
   return 0;
 }

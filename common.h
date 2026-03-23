@@ -15,21 +15,23 @@
 /** @brief Maximum heap memory the program may use (10 MiB). */
 #define MAX_MEMORY_ALLOCATED (10 * 1024 * 1024)
 
-/** @brief Maximum length of a single input line in bytes (64 KiB). */
+/** @brief Maximum length of a single input line in bytes. */
 #define MAX_INSTRC_LENGTH 65535
 
 /** @brief Multi-purpose buffer for strings. */
 #define BUFFER_LIMIT 1024
 
-/** @brief Number of slots in the IVA lookup table (one per letter A–Z). */
+/** @brief Number of slots in the IVA lookup table. */
 #define IVA_TABLE_SIZE 26
+
+/** @brief Maximum catalog products allowed. */
+#define MAX_CATALOG_PRODUCTS 10000
+
+/** @brief Default NIF value for final consumer. */
+#define DEFAULT_NIF 999999999
 
 /**
  * @brief One entry in the IVA rate table.
- *
- * @details The IVA table is an array of IVA_TABLE_SIZE entries. Each slot
- * corresponds to a letter (Index is get by subtracting 'A' to the iva class)
- * and is a struct as follows: its value and whether that cell is filled.
  */
 typedef struct {
   int value;   /**< Tax percentage, e.g. 23 for 23 %. */
@@ -38,16 +40,12 @@ typedef struct {
 
 /**
  * @brief A product registered in the catalog.
- *
- * @details The catalog is a dynamic array sorted by EAN (to have O log n
- * lookups with bsearch). The insertion_order is kept so that in cmd_l, the
- * products can be listed by creation order.
  */
 typedef struct {
-  char *desc;       /**< Heap-allocated description string (max 50 bytes). */
-  double price;     /**< Unit price before IVA; always positive. */
-  int stock;        /**< Units currently available (not in basket). */
-  int sold;         /**< Cumulative units sold or reserved in the basket. */
+  char *desc;       /**< Heap-allocated description string. */
+  double price;     /**< Unit price before IVA. */
+  int stock;        /**< Units currently available. */
+  int sold;         /**< Cumulative units sold or reserved. */
   int insert_order; /**< Counter used in cmd_l. */
   char ean[14];     /**< EAN-8 or EAN-13 code plus '\0' */
   char iva_class;   /**< IVA class letter, e.g. 'D'. */
@@ -55,28 +53,21 @@ typedef struct {
 
 /**
  * @brief A finalised invoice stored in a client's FIFO queue.
- * @details The invoices are stored in an array, each new client being
- * inserted in the right position, by alphabetical order. Each client is a
- * FIFO pile of invoices, ensuring they are in chronological order.
  */
 typedef struct {
-  long long total_cents;  /**< Total value including IVA. */
-  int nif;       /**< Client NIF (tax identification number). */
-  int id;        /**< Number in the order of invoice creation. */
-  int num_items; /**< Number of product units covered by this invoice. */
+  long long total_cents; /**< Total value including IVA. */
+  int nif;               /**< Client NIF. */
+  int id;                /**< Invoice creation ID. */
+  int num_items;         /**< Number of product units covered. */
 } Invoice;
 
 /**
  * @brief Record per-client that owns a FIFO queue of invoices.
- *
- * @details The clients in the array in SystemState are sorted by name,
- * allowing O log n lookup using bsearch. The array or invoices is append-only,
- * to ensure they are in chronological order and dont need sorting.
  */
 typedef struct {
   char *name;        /**< Heap-allocated client name. */
-  int nif;           /**< Client NIF stored for printing with cmd_d. */
-  Invoice *invoices; /**< Dynamic array of invoices in chronological order. */
+  int nif;           /**< Client NIF. */
+  Invoice *invoices; /**< Dynamic array of invoices. */
   int invoice_count; /**< Number of invoices currently stored. */
   int invoice_cap;   /**< Allocated capacity of the invoices array. */
 } ClientRecord;
@@ -86,25 +77,18 @@ typedef struct {
  */
 typedef struct {
   char ean[14]; /**< EAN code that identifies the product. */
-  int amount;   /**< Quantity in the basket; may reach zero after removals. */
+  int amount;   /**< Quantity in the basket. */
 } BasketItem;
 
 /**
  * @brief Top-level system state passed to every command handler.
- *
- * @details This struct is the holy grail of the program. All hail SystemState.
- * keeps track of max capacities (that change because i use dynamic arrays),
- * and currently_used capacities and also keeps the pointers to said arrays.
- * Keeps the number of invoices printed, number of products added, total sales.
- * and total items sold. Keeps track of the memory that is dynamically used to
- * ensure i dont run out.
  */
 typedef struct {
   Product *catalog;     /**< Dynamic array of products sorted by EAN. */
   int catalog_count;    /**< Number of products currently in the catalog. */
   int catalog_capacity; /**< Allocated capacity of the catalog array. */
 
-  ClientRecord *clients; /**< Dynamic array of client records sorted by name.*/
+  ClientRecord *clients; /**< Dynamic array of client records. */
   int client_count;      /**< Number of client records stored. */
   int client_capacity;   /**< Allocated capacity of the clients array. */
 
@@ -114,10 +98,10 @@ typedef struct {
 
   size_t memory_used; /**< Running total of heap bytes currently tracked. */
 
-  int next_invoice_id;    /**< Next invoice ID to assign; starts at 1. */
-  int next_product_order; /**< Counter of product insertion order.*/
+  int next_invoice_id;    /**< Next invoice ID to assign. */
+  int next_product_order; /**< Counter of product insertion order. */
   int global_items;       /**< Total item count across all live invoices. */
-  long long global_sales_cents;    /**< Total revenue across all live invoices. */
+  long long global_sales_cents; /**< Total revenue across all invoices. */
 } SystemState;
 
 #endif /* COMMON_H */

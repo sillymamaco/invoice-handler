@@ -32,18 +32,18 @@ void clean_all(SystemState *sys) {
   }
 
   if (sys->catalog) {
-    for (int i = 0; i < sys->catalog_count; i++)
+    for (int i = 0; i < sys->catalog_count; i++) {
       if (sys->catalog[i].desc)
         free_safe(sys->catalog[i].desc, strlen(sys->catalog[i].desc) + 1, sys);
+    }
     free_safe(sys->catalog, sys->catalog_capacity * sizeof(Product), sys);
     sys->catalog = NULL;
   }
 }
 
 /**
- * @brief Print @c "No memory.", release all heap memory, and terminate.
- *
- * @param sys System state to clean before calling @c exit(0).
+ * @brief Print "No memory." and terminate program cleanly.
+ * @param sys System state.
  */
 static void no_memory(SystemState *sys) {
   printf("No memory.\n");

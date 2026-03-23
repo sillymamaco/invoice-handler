@@ -1,7 +1,7 @@
 /**
  * @file commands.c
- * @brief Handlers for a (basket add/remove), f (finalise invoice),
- * c (list client invoices), and d (delete invoice or reduce stock).
+ * @author IST1117890 (Irina Cojocari)
+ * @brief Handlers for basket add/remove, invoice finalisation, client lists.
  */
 
 #include "commands.h"
@@ -9,86 +9,19 @@
 #include "shared.h"
 #include "utils.h"
 
-/** @brief Copy the raw NIF digit string from @p line into @p nif_raw,
- *  preserving leading zeros for accurate error messages. Only copies when
- *  the digit run is followed by whitespace or end-of-string.
- *  @param line NUL-terminated f command argument. @param nif_raw Output buffer.
- */
-static void extract_nif_raw(const char *line, char *nif_raw) {
-  const char *ptr = line;
-  while (*ptr && isspace((unsigned char)*ptr))
-    ptr++;
-  if (!isdigit((unsigned char)*ptr))
-    return;
-  const char *tmp = ptr;
-  while (*tmp && isdigit((unsigned char)*tmp))
-    tmp++;
-  if (*tmp != '\0' && !isspace((unsigned char)*tmp))
-    return;
-  size_t len = (size_t)(tmp - ptr);
-  if (len >= MAX_INSTRC_LENGTH)
-    len = MAX_INSTRC_LENGTH - 1;
-  memcpy(nif_raw, ptr, len);
-  nif_raw[len] = '\0';
-}
-
-/** @brief Read and validate f command arguments: NIF (optional) and client
- *  name. Returns 0 and signals "invalid name" when: a NIF has no name,
- *  a quote is unclosed, or the name fails is_valid_name_start().
- *  @param sys System state. @param name_buf Output name buffer.
- *  @param nif_raw Output raw NIF string. @param nif Receives parsed NIF. */
-static int parse_f_args(SystemState *sys, char *name_buf, char *nif_raw,
-                        int *nif) {
-  char *line = read_token_safe(sys);
-  if (!line)
-    return 1;
-
-  extract_nif_raw(line, nif_raw);
-  int had_quote = (strchr(line, '"') != NULL);
-  int valid_syntax =
-      parse_invoice_client(line, nif, name_buf, MAX_INSTRC_LENGTH);
-  int name_was_provided = (name_buf[0] != '\0');
-  free_safe(line, strlen(line) + 1, sys);
-
-  if (!valid_syntax)
-    return 0;
-  if (!name_was_provided && (nif_raw[0] != '\0' || had_quote))
-    return 0;
-  if (name_was_provided && !is_valid_name_start(name_buf))
-    return 0;
-  return 1;
-}
-
-/** @brief Read the optional client name argument for the c command, handling
- *  both quoted and unquoted forms. Leaves @p name empty when absent.
- *  @param sys System state. @param name Output buffer. */
 static int parse_c_name(SystemState *sys, char *name) {
   char *line = read_token_safe(sys);
   if (!line)
     return 1;
-  char *ptr = line;
+
+  const char *ptr = line;
   while (*ptr && isspace((unsigned char)*ptr))
     ptr++;
+
   if (*ptr) {
-    if (*ptr == '"') {
-      ptr++;
-      char *end = strchr(ptr, '"');
-      if (!end) {
-        free_safe(line, strlen(line) + 1, sys);
-        return 0;
-      }
-      *end = '\0';
-      strncpy(name, ptr, MAX_INSTRC_LENGTH - 1);
-      ptr = end + 1;
-    } else {
-      char *start = ptr;
-      while (*ptr && !isspace((unsigned char)*ptr))
-        ptr++;
-      size_t len = (size_t)(ptr - start);
-      if (len >= MAX_INSTRC_LENGTH)
-        len = MAX_INSTRC_LENGTH - 1;
-      memcpy(name, start, len);
-      name[len] = '\0';
+    if (!extract_quoted_string(&ptr, name, MAX_INSTRC_LENGTH)) {
+      free_safe(line, strlen(line) + 1, sys);
+      return 0;
     }
     while (*ptr && isspace((unsigned char)*ptr))
       ptr++;
@@ -101,37 +34,20 @@ static int parse_c_name(SystemState *sys, char *name) {
   return 1;
 }
 
-/** @brief Print all invoices for @p cr in chronological order.
- *  Format: "<id> <total> <client-name>" */
 static void print_client_invoices(const ClientRecord *cr) {
-  for (int ii = 0; ii < cr->invoice_count; ii++)
+  for (int ii = 0; ii < cr->invoice_count; ii++) {
     printf("%d %.2f %s\n", cr->invoices[ii].id,
            cr->invoices[ii].total_cents / 100.0, cr->name);
+  }
 }
 
 void cmd_a(SystemState *sys, Iva table[]) {
-  int c;
-  while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
-    ;
-  if (c == '\n' || c == EOF) {
+  char buf[BUFFER_LIMIT] = {0};
+
+  if (!read_line_to_buffer(buf, BUFFER_LIMIT) && buf[0] == '\0') {
     print_sorted_basket(sys, table);
     return;
   }
-
-  char buf[BUFFER_LIMIT] = {0};
-  int i = 0, truncated = 0;
-  buf[i++] = (char)c;
-  while ((c = getchar()) != '\n' && c != EOF) {
-    if (c == '\r')
-      continue;
-    if (i < BUFFER_LIMIT - 1)
-      buf[i++] = (char)c;
-    else
-      truncated = 1;
-  }
-  if (truncated)
-    drain_line();
-  buf[i] = '\0';
 
   char s1[BUFFER_LIMIT], s2[14];
   char ean[14] = {0};
@@ -140,7 +56,7 @@ void cmd_a(SystemState *sys, Iva table[]) {
   if (sscanf(buf, "%1023s %13s", s1, s2) == 2) {
     char *endp = NULL;
     long pq = strtol(s1, &endp, 10);
-    if (endp != s1 && *endp == '\0' && pq != 0) {
+    if (endp != s1 && *endp == '\0') {
       qty = (int)pq;
       strncpy(ean, s2, 13);
       ean[13] = '\0';
@@ -152,26 +68,96 @@ void cmd_a(SystemState *sys, Iva table[]) {
     strncpy(ean, s1, 13);
     ean[13] = '\0';
   }
-
   process_basket_add(sys, table, ean, qty);
 }
 
-void cmd_f(SystemState *sys, Iva table[]) {
-  int nif = 999999999;
-  char name_buf[MAX_INSTRC_LENGTH] = "";
-  char nif_raw[MAX_INSTRC_LENGTH] = "";
+static int parse_f_nif(const char **ptr, int *nif, char *nif_raw) {
+  if (isdigit((unsigned char)**ptr)) {
+    const char *tmp = *ptr;
+    while (*tmp && isdigit((unsigned char)*tmp))
+      tmp++;
+    if (*tmp == '\0' || isspace((unsigned char)*tmp)) {
+      size_t len = tmp - *ptr;
+      if (len >= MAX_INSTRC_LENGTH)
+        len = MAX_INSTRC_LENGTH - 1;
+      strncpy(nif_raw, *ptr, len);
+      nif_raw[len] = '\0';
 
-  if (!parse_f_args(sys, name_buf, nif_raw, &nif)) {
+      if (nif_raw[0] == '0')
+        *nif = 0;
+      else
+        sscanf(nif_raw, "%d", nif);
+      *ptr = tmp;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int parse_f_name(const char **ptr, char *name_buf, int *has_name) {
+  if (**ptr) {
+    *has_name = 1;
+    if (!extract_quoted_string(ptr, name_buf, MAX_INSTRC_LENGTH))
+      return 0;
+    while (**ptr && isspace((unsigned char)**ptr))
+      (*ptr)++;
+    if (**ptr != '\0')
+      return 0;
+  }
+  return 1;
+}
+
+/**
+ * @brief Validates NIF and Name for the f command.
+ * @param nif The numeric NIF.
+ * @param nif_raw String representation of NIF.
+ * @param name_buf Name string.
+ * @param has_name Flag if name was provided.
+ * @param valid_name Flag if name parsing succeeded.
+ * @return Non-zero if valid.
+ */
+static int validate_invoice_client_data(int nif, const char *nif_raw,
+                                        const char *name_buf, int has_name,
+                                        int valid_name) {
+  if (nif_raw[0] != '\0') {
+    if (strlen(nif_raw) != 9 || nif < 100000000 || nif > 999999999) {
+      printf("%s: no such nif\n", nif_raw);
+      return 0;
+    }
+  }
+  if (has_name && (!valid_name || !is_valid_name_start(name_buf))) {
     printf("invalid name\n");
-    return;
+    return 0;
   }
-  if (name_buf[0] == '\0')
-    strcpy(name_buf, "Cliente final");
+  return 1;
+}
 
-  if (nif != 999999999 && (nif < 100000000 || nif > 999999999)) {
-    printf("%s: no such nif\n", nif_raw[0] ? nif_raw : "0");
+void cmd_f(SystemState *sys, Iva table[]) {
+  int nif = DEFAULT_NIF, has_name = 0;
+  char name_buf[MAX_INSTRC_LENGTH] = "", nif_raw[MAX_INSTRC_LENGTH] = "";
+
+  char *line = read_token_safe(sys);
+  if (!line) {
+    finalize_invoice(sys, table, DEFAULT_NIF, "Cliente final");
     return;
   }
+
+  const char *ptr = line;
+  while (*ptr && isspace((unsigned char)*ptr))
+    ptr++;
+
+  parse_f_nif(&ptr, &nif, nif_raw);
+  while (*ptr && isspace((unsigned char)*ptr))
+    ptr++;
+
+  int valid_name = parse_f_name(&ptr, name_buf, &has_name);
+  free_safe(line, strlen(line) + 1, sys);
+
+  if (!validate_invoice_client_data(nif, nif_raw, name_buf, has_name,
+                                    valid_name))
+    return;
+  if (!has_name)
+    strcpy(name_buf, "Cliente final");
   if (strcmp(name_buf, "error") == 0) {
     cancel_basket(sys);
     return;
@@ -182,17 +168,11 @@ void cmd_f(SystemState *sys, Iva table[]) {
 
 void cmd_c(SystemState *sys) {
   char name[MAX_INSTRC_LENGTH] = "";
-
-  if (!parse_c_name(sys, name)) {
+  if (!parse_c_name(sys, name) ||
+      (name[0] != '\0' && !is_valid_name_start(name))) {
     printf("invalid name\n");
     return;
   }
-
-  if (name[0] != '\0' && !is_valid_name_start(name)) {
-    printf("invalid name\n");
-    return;
-  }
-
   if (name[0] == '\0') {
     for (int ci = 0; ci < sys->client_count; ci++)
       print_client_invoices(&sys->clients[ci]);
@@ -207,28 +187,18 @@ void cmd_c(SystemState *sys) {
 }
 
 void cmd_d(SystemState *sys) {
-  int c;
-  while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
-    ;
-  if (c == '\n' || c == EOF) return;
-
   char buf[MAX_INSTRC_LENGTH] = {0};
-  int i = 0, truncated = 0;
-  buf[i++] = (char)c;
-  while ((c = getchar()) != '\n' && c != EOF) {
-    if (c == '\r') continue;
-    if (i < MAX_INSTRC_LENGTH - 1) buf[i++] = (char)c;
-    else truncated = 1;
-  }
-  if (truncated) drain_line();
-  buf[i] = '\0';
+  if (!read_line_to_buffer(buf, MAX_INSTRC_LENGTH) && buf[0] == '\0')
+    return;
 
   char arg1[BUFFER_LIMIT], arg2[BUFFER_LIMIT];
   int n = sscanf(buf, "%1023s %1023s", arg1, arg2);
-  if (n == 1)
+  if (n == 1) {
     cmd_d_delete_inv(sys, atoi(arg1));
-  else if (n == 2) {
-    if (strlen(arg1) > 13) printf("invalid ean\n");
-    else cmd_d_reduce_stock(sys, arg1, atoi(arg2));
+  } else if (n == 2) {
+    if (strlen(arg1) > 13)
+      printf("invalid ean\n");
+    else
+      cmd_d_reduce_stock(sys, arg1, atoi(arg2));
   }
 }
