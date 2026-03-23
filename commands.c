@@ -71,93 +71,135 @@ void cmd_a(SystemState *sys, Iva table[]) {
   process_basket_add(sys, table, ean, qty);
 }
 
-static int parse_f_nif(const char **ptr, int *nif, char *nif_raw) {
-  if (isdigit((unsigned char)**ptr)) {
-    const char *tmp = *ptr;
-    while (*tmp && isdigit((unsigned char)*tmp))
-      tmp++;
-    if (*tmp == '\0' || isspace((unsigned char)*tmp)) {
-      size_t len = tmp - *ptr;
-      if (len >= MAX_INSTRC_LENGTH)
-        len = MAX_INSTRC_LENGTH - 1;
-      strncpy(nif_raw, *ptr, len);
-      nif_raw[len] = '\0';
-
-      if (nif_raw[0] == '0')
-        *nif = 0;
-      else
-        sscanf(nif_raw, "%d", nif);
-      *ptr = tmp;
-      return 1;
+static void handle_f_single_word(const char *start, size_t len, char *nif_raw,
+                                 char *name_buf, int *has_name) {
+  char w1[MAX_INSTRC_LENGTH];
+  strncpy(w1, start, len);
+  w1[len] = '\0';
+  int all_digits = 1;
+  for (size_t i = 0; i < len; i++) {
+    if (!isdigit((unsigned char)w1[i])) {
+      all_digits = 0;
+      break;
     }
   }
-  return 0;
-}
-
-static int parse_f_name(const char **ptr, char *name_buf, int *has_name) {
-  if (**ptr) {
+  if (all_digits)
+    strcpy(nif_raw, w1);
+  else {
+    strcpy(name_buf, w1);
     *has_name = 1;
-    if (!extract_quoted_string(ptr, name_buf, MAX_INSTRC_LENGTH))
-      return 0;
-    while (**ptr && isspace((unsigned char)**ptr))
-      (*ptr)++;
-    if (**ptr != '\0')
-      return 0;
   }
-  return 1;
 }
 
-/**
- * @brief Validates NIF and Name for the f command.
- * @param nif The numeric NIF.
- * @param nif_raw String representation of NIF.
- * @param name_buf Name string.
- * @param has_name Flag if name was provided.
- * @param valid_name Flag if name parsing succeeded.
- * @return Non-zero if valid.
- */
-static int validate_invoice_client_data(int nif, const char *nif_raw,
-                                        const char *name_buf, int has_name,
-                                        int valid_name) {
-  if (nif_raw[0] != '\0') {
-    if (strlen(nif_raw) != 9 || nif < 100000000 || nif > 999999999) {
-      printf("%s: no such nif\n", nif_raw);
-      return 0;
+static void handle_f_multi_word(const char *start, size_t len,
+                                const char *after_w1, char *nif_raw,
+                                char *name_buf, int *has_name,
+                                int *valid_name) {
+  strncpy(nif_raw, start, len);
+  nif_raw[len] = '\0';
+  const char *ptr = after_w1;
+  *has_name = 1;
+  if (*ptr == '"') {
+    if (!extract_quoted_string(&ptr, name_buf, MAX_INSTRC_LENGTH))
+      *valid_name = 0;
+  } else {
+    const char *ns = ptr;
+    while (*ptr && !isspace((unsigned char)*ptr))
+      ptr++;
+    size_t nlen = ptr - ns;
+    strncpy(name_buf, ns, nlen);
+    name_buf[nlen] = '\0';
+  }
+  while (*ptr && isspace((unsigned char)*ptr))
+    ptr++;
+  if (*ptr != '\0')
+    *valid_name = 0;
+}
+
+static void parse_f_args(const char *line, char *nif_raw, char *name_buf,
+                         int *has_name, int *valid_name) {
+  *has_name = 0;
+  *valid_name = 1;
+  nif_raw[0] = '\0';
+  name_buf[0] = '\0';
+  const char *ptr = line;
+  while (*ptr && isspace((unsigned char)*ptr))
+    ptr++;
+  if (!*ptr)
+    return;
+
+  if (*ptr == '"') {
+    if (!extract_quoted_string(&ptr, name_buf, MAX_INSTRC_LENGTH))
+      *valid_name = 0;
+    *has_name = 1;
+    while (*ptr && isspace((unsigned char)*ptr))
+      ptr++;
+    if (*ptr != '\0')
+      *valid_name = 0;
+    return;
+  }
+
+  const char *start = ptr;
+  while (*ptr && !isspace((unsigned char)*ptr))
+    ptr++;
+  size_t len = ptr - start;
+
+  const char *after_w1 = ptr;
+  while (*after_w1 && isspace((unsigned char)*after_w1))
+    after_w1++;
+
+  if (*after_w1 == '\0') {
+    handle_f_single_word(start, len, nif_raw, name_buf, has_name);
+  } else {
+    handle_f_multi_word(start, len, after_w1, nif_raw, name_buf, has_name,
+                        valid_name);
+  }
+}
+
+static int validate_f_nif(const char *nif_raw, int *nif) {
+  int all_digits = 1;
+  for (int i = 0; nif_raw[i]; i++) {
+    if (!isdigit((unsigned char)nif_raw[i])) {
+      all_digits = 0;
+      break;
     }
   }
-  if (has_name && (!valid_name || !is_valid_name_start(name_buf))) {
-    printf("invalid name\n");
+  if (!all_digits) {
+  printf("%s: no such nif\n", nif_raw);
+    return 0;
+  }
+  *nif = atoi(nif_raw);
+  if (strlen(nif_raw) != 9 || *nif < 100000000 || *nif > 999999999) {
+    printf("%s: no such nif\n", nif_raw);
     return 0;
   }
   return 1;
 }
 
 void cmd_f(SystemState *sys, Iva table[]) {
-  int nif = DEFAULT_NIF, has_name = 0;
+  int nif = DEFAULT_NIF, has_name = 0, valid_name = 1;
   char name_buf[MAX_INSTRC_LENGTH] = "", nif_raw[MAX_INSTRC_LENGTH] = "";
 
   char *line = read_token_safe(sys);
-  if (!line) {
-    finalize_invoice(sys, table, DEFAULT_NIF, "Cliente final");
-    return;
+  if (line) {
+    parse_f_args(line, nif_raw, name_buf, &has_name, &valid_name);
+    free_safe(line, strlen(line) + 1, sys);
   }
 
-  const char *ptr = line;
-  while (*ptr && isspace((unsigned char)*ptr))
-    ptr++;
+  if (nif_raw[0] != '\0') {
+    if (!validate_f_nif(nif_raw, &nif))
+      return;
+  }
 
-  parse_f_nif(&ptr, &nif, nif_raw);
-  while (*ptr && isspace((unsigned char)*ptr))
-    ptr++;
-
-  int valid_name = parse_f_name(&ptr, name_buf, &has_name);
-  free_safe(line, strlen(line) + 1, sys);
-
-  if (!validate_invoice_client_data(nif, nif_raw, name_buf, has_name,
-                                    valid_name))
-    return;
-  if (!has_name)
+  if (has_name) {
+    if (!valid_name || !is_valid_name_start(name_buf)) {
+      printf("invalid name\n");
+      return;
+    }
+  } else {
     strcpy(name_buf, "Cliente final");
+  }
+
   if (strcmp(name_buf, "error") == 0) {
     cancel_basket(sys);
     return;
