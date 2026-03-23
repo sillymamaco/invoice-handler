@@ -12,8 +12,9 @@
 
 int get_or_create_client(SystemState *sys, const char *name, int nif) {
   int idx = find_client_idx(sys, name);
-  if (idx != -1)
+  if (idx != -1) {
     return idx;
+  }
 
   if (sys->client_count == sys->client_capacity) {
     int nc = sys->client_capacity ? sys->client_capacity * 2 : 8;
@@ -97,19 +98,22 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
   for (int ci = 0; ci < sys->client_count; ci++) {
     ClientRecord *cr = &sys->clients[ci];
     for (int ii = 0; ii < cr->invoice_count; ii++) {
-      if (cr->invoices[ii].id != inv_id)
+      if (cr->invoices[ii].id != inv_id) {
         continue;
+      }
 
       Invoice *inv = &cr->invoices[ii];
       printf("%.2f %d %s\n", inv->total_cents / 100.0, inv->nif, cr->name);
 
       sys->global_items -= inv->num_items;
       sys->global_sales_cents -= inv->total_cents;
-      if (sys->global_sales_cents < 0)
+      if (sys->global_sales_cents < 0) {
         sys->global_sales_cents = 0;
+      }
 
-      for (int k = ii; k < cr->invoice_count - 1; k++)
+      for (int k = ii; k < cr->invoice_count - 1; k++) {
         cr->invoices[k] = cr->invoices[k + 1];
+      }
       cr->invoice_count--;
       return;
     }
@@ -125,42 +129,62 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
  */
 static int get_basket_reserved_qty(SystemState *sys, const char *ean) {
   for (int j = 0; j < sys->basket_count; j++) {
-    if (strcmp(sys->basket[j].ean, ean) == 0)
+    if (strcmp(sys->basket[j].ean, ean) == 0) {
       return sys->basket[j].amount;
+    }
   }
   return 0;
 }
 
-void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
-  if (!validate_ean(ean)) {
-    printf("invalid ean\n");
-    return;
-  }
-  int cat_idx = find_product_idx(sys, ean);
-  if (cat_idx == -1) {
-    printf("%s: no such product\n", ean);
-    return;
-  }
-
-  if (get_basket_reserved_qty(sys, ean) > 0) {
-    printf("product in use\n");
-    return;
-  }
-  if (qty <= 0 || qty > sys->catalog[cat_idx].stock) {
-    printf("invalid quantity\n");
-    return;
-  }
-
+static void remove_stock_and_print(SystemState *sys, int cat_idx, int qty) {
   sys->catalog[cat_idx].stock -= qty;
   if (sys->catalog[cat_idx].stock == 0) {
     printf("0 %s\n", sys->catalog[cat_idx].desc);
     free_safe(sys->catalog[cat_idx].desc,
               strlen(sys->catalog[cat_idx].desc) + 1, sys);
     sys->catalog[cat_idx].desc = NULL;
-    for (int j = cat_idx; j < sys->catalog_count - 1; j++)
+    for (int j = cat_idx; j < sys->catalog_count - 1; j++) {
       sys->catalog[j] = sys->catalog[j + 1];
+    }
     sys->catalog_count--;
   } else {
     printf("%d %s\n", sys->catalog[cat_idx].stock, sys->catalog[cat_idx].desc);
+  }
+}
+
+/**
+ * @brief Validates if stock can be reduced for a specific item.
+ * @param sys System state.
+ * @param ean EAN string.
+ * @param qty Quantity to remove.
+ * @param cat_idx Output pointer for catalog index.
+ * @return Non-zero if valid.
+ */
+static int validate_stock_reduction(SystemState *sys, const char *ean, int qty,
+                                    int *cat_idx) {
+  if (!validate_ean(ean)) {
+    printf("invalid ean\n");
+    return 0;
+  }
+  *cat_idx = find_product_idx(sys, ean);
+  if (*cat_idx == -1) {
+    printf("%s: no such product\n", ean);
+    return 0;
+  }
+  if (get_basket_reserved_qty(sys, ean) > 0) {
+    printf("product in use\n");
+    return 0;
+  }
+  if (qty <= 0 || qty > sys->catalog[*cat_idx].stock) {
+    printf("invalid quantity\n");
+    return 0;
+  }
+  return 1;
+}
+
+void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
+  int cat_idx;
+  if (validate_stock_reduction(sys, ean, qty, &cat_idx)) {
+    remove_stock_and_print(sys, cat_idx, qty);
   }
 }

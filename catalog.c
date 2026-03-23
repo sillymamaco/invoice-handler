@@ -34,8 +34,7 @@ int read_p_line(char *buf, int bufsz) {
   return 1;
 }
 
-char *extract_desc(const char *line, SystemState *sys) {
-  const char *dp = line;
+static const char *skip_p_tokens(const char *dp) {
   int skipped = 0;
   while (*dp && skipped < 4) {
     while (*dp && isspace((unsigned char)*dp))
@@ -46,6 +45,11 @@ char *extract_desc(const char *line, SystemState *sys) {
   }
   while (*dp && isspace((unsigned char)*dp))
     dp++;
+  return dp;
+}
+
+char *extract_desc(const char *line, SystemState *sys) {
+  const char *dp = skip_p_tokens(line);
   if (!*dp)
     return NULL;
 
@@ -225,6 +229,27 @@ void cmd_l_tokens(SystemState *sys, Product **ordered, char *buf) {
   }
 }
 
+static void handle_catalog_update_insert(SystemState *sys, const char *ean,
+                                         char iva_c, double price, int stock,
+                                         char *desc) {
+  int idx = find_product_idx(sys, ean);
+  if (idx != -1) {
+    if (!catalog_update(sys, idx, ean, iva_c, price, stock, desc)) {
+      free_safe(desc, strlen(desc) + 1, sys);
+      return;
+    }
+  } else {
+    if (sys->catalog_count >= 10000) {
+      printf("invalid product\n");
+      free_safe(desc, strlen(desc) + 1, sys);
+      return;
+    }
+    catalog_insert(sys, ean, iva_c, price, stock, desc);
+    idx = find_product_idx(sys, ean);
+  }
+  printf("%d\n", sys->catalog[idx].stock);
+}
+
 void cmd_p(SystemState *sys, Iva table[]) {
   char linebuf[MAX_INSTRC_LENGTH] = {0};
   if (!read_p_line(linebuf, MAX_INSTRC_LENGTH))
@@ -245,22 +270,7 @@ void cmd_p(SystemState *sys, Iva table[]) {
     return;
   }
 
-  int idx = find_product_idx(sys, ean);
-  if (idx != -1) {
-    if (!catalog_update(sys, idx, ean, iva_c, price, stock, desc)) {
-      free_safe(desc, strlen(desc) + 1, sys);
-      return;
-    }
-  } else {
-    if (sys->catalog_count >= 10000) {
-      printf("invalid product\n");
-      free_safe(desc, strlen(desc) + 1, sys);
-      return;
-    }
-    catalog_insert(sys, ean, iva_c, price, stock, desc);
-    idx = find_product_idx(sys, ean);
-  }
-  printf("%d\n", sys->catalog[idx].stock);
+  handle_catalog_update_insert(sys, ean, iva_c, price, stock, desc);
 }
 
 void cmd_l(SystemState *sys) {

@@ -38,6 +38,44 @@ static void init_iva_table(int argc, char *argv[], Iva iva_table[]) {
 }
 
 /**
+ * @brief Dispatch the correct command.
+ * @param command Command character.
+ * @param sys System state.
+ * @param iva_table IVA table.
+ * @return 0 if quit, 1 to continue.
+ */
+static int process_command(int command, SystemState *sys, Iva iva_table[]) {
+  switch (command) {
+  case 'q':
+    return 0;
+  case 'p':
+    cmd_p(sys, iva_table);
+    break;
+  case 'l':
+    cmd_l(sys);
+    break;
+  case 'a':
+    cmd_a(sys, iva_table);
+    break;
+  case 'r':
+    cmd_r(sys, iva_table);
+    break;
+  case 'f':
+    cmd_f(sys, iva_table);
+    break;
+  case 'c':
+    cmd_c(sys);
+    break;
+  case 'd':
+    cmd_d(sys);
+    break;
+  default:
+    break;
+  }
+  return 1;
+}
+
+/**
  * @brief Initialise the system and run the command dispatch loop.
  * @param argc Argument count.
  * @param argv Argument vector.
@@ -54,34 +92,8 @@ int main(int argc, char *argv[]) {
   while ((command = getchar()) != EOF) {
     if (isspace(command))
       continue;
-    switch (command) {
-    case 'q':
-      clean_all(&sys);
-      return 0;
-    case 'p':
-      cmd_p(&sys, iva_table);
+    if (!process_command(command, &sys, iva_table))
       break;
-    case 'l':
-      cmd_l(&sys);
-      break;
-    case 'a':
-      cmd_a(&sys, iva_table);
-      break;
-    case 'r':
-      cmd_r(&sys, iva_table);
-      break;
-    case 'f':
-      cmd_f(&sys, iva_table);
-      break;
-    case 'c':
-      cmd_c(&sys);
-      break;
-    case 'd':
-      cmd_d(&sys);
-      break;
-    default:
-      break;
-    }
   }
 
   clean_all(&sys);

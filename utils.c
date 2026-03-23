@@ -19,14 +19,25 @@ void fill_buffer_from_stdin(char *buf, int *i, int *truncated) {
   }
 }
 
-int read_line_to_buffer(char *buf, size_t limit) {
+static int skip_leading_spaces(void) {
   int c;
-  int i = 0, truncated = 0;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
     ;
+  return c;
+}
+
+static void drain_stdin_line(void) {
+  int c;
+  while ((c = getchar()) != '\n' && c != EOF)
+    ;
+}
+
+int read_line_to_buffer(char *buf, size_t limit) {
+  int c = skip_leading_spaces();
   if (c == '\n' || c == EOF)
     return 0;
 
+  int i = 0, truncated = 0;
   buf[i++] = (char)c;
   while ((c = getchar()) != '\n' && c != EOF) {
     if (c == '\r')
@@ -36,10 +47,9 @@ int read_line_to_buffer(char *buf, size_t limit) {
     else
       truncated = 1;
   }
-  if (truncated) {
-    while ((c = getchar()) != '\n' && c != EOF)
-      ;
-  }
+
+  if (truncated)
+    drain_stdin_line();
   buf[i] = '\0';
   return truncated;
 }

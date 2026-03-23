@@ -10,6 +10,32 @@
 #include "common.h"
 
 /**
+ * @brief Fill buffer from stdin until newline or EOF.
+ * @param buf Buffer to fill.
+ * @param i Pointer to index.
+ * @param truncated Pointer to truncation flag.
+ */
+void fill_buffer_from_stdin(char *buf, int *i, int *truncated);
+
+/**
+ * @brief Extract a string handling quotes.
+ * @param ptr Pointer to input stream.
+ * @param name_buf Output buffer.
+ * @param name_buf_size Buffer size.
+ * @return Non-zero on success.
+ */
+int extract_quoted_string(const char **ptr, char *name_buf,
+                          size_t name_buf_size);
+
+/**
+ * @brief Read a full line from stdin into a buffer.
+ * @param buf Output buffer.
+ * @param limit Buffer size limit.
+ * @return Non-zero if line was truncated.
+ */
+int read_line_to_buffer(char *buf, size_t limit);
+
+/**
  * @brief Read the rest of the current stdin line as a single token.
  * @param sys System state.
  * @return Dynamically allocated string, or NULL for a blank line.
@@ -146,31 +172,5 @@ int cmp_names(const char *a, const char *b);
  * @return Index or -1 if not found.
  */
 int find_client_idx(SystemState *sys, const char *name);
-
-/**
- * @brief Fill buffer from stdin until newline or EOF.
- * @param buf Buffer to fill.
- * @param i Pointer to index.
- * @param truncated Pointer to truncation flag.
- */
-void fill_buffer_from_stdin(char *buf, int *i, int *truncated);
-
-/**
- * @brief Extract a string handling quotes.
- * @param ptr Pointer to input stream.
- * @param name_buf Output buffer.
- * @param name_buf_size Buffer size.
- * @return Non-zero on success.
- */
-int extract_quoted_string(const char **ptr, char *name_buf,
-                          size_t name_buf_size);
-
-/**
- * @brief Read a full line from stdin into a buffer.
- * @param buf Output buffer.
- * @param limit Buffer size limit.
- * @return Non-zero if line was truncated.
- */
-int read_line_to_buffer(char *buf, size_t limit);
 
 #endif /* UTILS_H */

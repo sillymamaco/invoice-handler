@@ -15,8 +15,9 @@ void cancel_basket(SystemState *sys) {
     if (idx != -1) {
       sys->catalog[idx].stock += sys->basket[i].amount;
       sys->catalog[idx].sold -= sys->basket[i].amount;
-      if (sys->catalog[idx].sold < 0)
+      if (sys->catalog[idx].sold < 0) {
         sys->catalog[idx].sold = 0;
+      }
     }
   }
   sys->basket_count = 0;
@@ -50,13 +51,15 @@ static void quick_sort_basket(BasketItem *arr, int lo, int hi) {
 }
 
 void print_sorted_basket(SystemState *sys, Iva table[]) {
-  if (sys->basket_count > 1)
+  if (sys->basket_count > 1) {
     quick_sort_basket(sys->basket, 0, sys->basket_count - 1);
+  }
   for (int i = 0; i < sys->basket_count; i++) {
     if (sys->basket[i].amount > 0) {
       int idx = find_product_idx(sys, sys->basket[i].ean);
-      if (idx != -1)
+      if (idx != -1) {
         print_basket_item(sys, table, idx, sys->basket[i].amount);
+      }
     }
   }
 }
@@ -83,48 +86,69 @@ static int insert_new_basket_item(SystemState *sys, const char *ean,
   return idx;
 }
 
-void process_basket_add(SystemState *sys, Iva table[], const char *ean,
-                        int qty) {
-  if (qty == 0)
-    return;
-  if (!validate_ean(ean)) {
-    printf("invalid ean\n");
-    return;
-  }
-
-  int basket_idx = -1;
+static int get_basket_idx(SystemState *sys, const char *ean) {
   for (int j = 0; j < sys->basket_count; j++) {
     if (strcmp(sys->basket[j].ean, ean) == 0) {
-      basket_idx = j;
-      break;
+      return j;
     }
   }
+  return -1;
+}
 
-  int current = (basket_idx != -1) ? sys->basket[basket_idx].amount : 0;
+/**
+ * @brief Validates if an item can be added to or removed from the basket.
+ * @param sys System state.
+ * @param ean EAN string.
+ * @param qty Quantity to adjust.
+ * @param b_idx Output pointer for basket index.
+ * @param c_idx Output pointer for catalog index.
+ * @return Non-zero if valid.
+ */
+static int validate_basket_add(SystemState *sys, const char *ean, int qty,
+                               int *b_idx, int *c_idx) {
+  if (qty == 0) {
+    return 0;
+  }
+  if (!validate_ean(ean)) {
+    printf("invalid ean\n");
+    return 0;
+  }
+  *b_idx = get_basket_idx(sys, ean);
+  int current = (*b_idx != -1) ? sys->basket[*b_idx].amount : 0;
   if (qty < 0 && current + qty < 0) {
     printf("invalid quantity\n");
-    return;
+    return 0;
   }
-
-  int cat_idx = find_product_idx(sys, ean);
-  if (cat_idx == -1) {
+  *c_idx = find_product_idx(sys, ean);
+  if (*c_idx == -1) {
     printf("%s: no such product\n", ean);
-    return;
+    return 0;
   }
-  if (qty > 0 && qty > sys->catalog[cat_idx].stock) {
+  if (qty > 0 && qty > sys->catalog[*c_idx].stock) {
     printf("no stock\n");
+    return 0;
+  }
+  return 1;
+}
+
+void process_basket_add(SystemState *sys, Iva table[], const char *ean,
+                        int qty) {
+  int b_idx, c_idx;
+  if (!validate_basket_add(sys, ean, qty, &b_idx, &c_idx)) {
     return;
   }
 
+  int current = (b_idx != -1) ? sys->basket[b_idx].amount : 0;
   int new_amount = current + qty;
-  sys->catalog[cat_idx].stock -= qty;
-  sys->catalog[cat_idx].sold += qty;
 
-  if (basket_idx != -1) {
-    sys->basket[basket_idx].amount = new_amount;
+  sys->catalog[c_idx].stock -= qty;
+  sys->catalog[c_idx].sold += qty;
+
+  if (b_idx != -1) {
+    sys->basket[b_idx].amount = new_amount;
   } else {
-    basket_idx = insert_new_basket_item(sys, ean, new_amount);
+    insert_new_basket_item(sys, ean, new_amount);
   }
 
-  print_basket_item(sys, table, cat_idx, new_amount);
+  print_basket_item(sys, table, c_idx, new_amount);
 }
