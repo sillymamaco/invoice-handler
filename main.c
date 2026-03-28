@@ -1,7 +1,7 @@
 /**
+ * Program entry point.
  * @file main.c
  * @author IST1117890 (Irina Cojocari)
- * @brief Program entry point.
  */
 
 #include "commands.h"
@@ -10,7 +10,7 @@
 #include "utils.h"
 
 /**
- * @brief Initialize the IVA table from arguments or defaults.
+ * Initialize the IVA table from arguments or defaults.
  * @param argc Argument count.
  * @param argv Argument vector.
  * @param iva_table Array to initialize.
@@ -38,7 +38,7 @@ static void init_iva_table(int argc, char *argv[], Iva iva_table[]) {
 }
 
 /**
- * @brief Dispatch the correct command.
+ * Dispatch the correct command.
  * @param command Command character.
  * @param sys System state.
  * @param iva_table IVA table.
@@ -76,7 +76,7 @@ static int process_command(int command, SystemState *sys, Iva iva_table[]) {
 }
 
 /**
- * @brief Initialise the system and run the command dispatch loop.
+ * Initialise the system and run the command dispatch loop.
  * @param argc Argument count.
  * @param argv Argument vector.
  * @return 0 on normal termination.

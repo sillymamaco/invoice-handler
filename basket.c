@@ -1,14 +1,17 @@
 /**
+ * Shopping basket operations.
  * @file basket.c
  * @author IST1117890 (Irina Cojocari)
- * @brief Shopping basket operations.
  */
 
-#include "commands.h"
 #include "memory.h"
 #include "shared.h"
 #include "utils.h"
 
+/**
+ * Return all basket quantities to stock and reset basket_count to 0.
+ * @param sys System state.
+ */
 void cancel_basket(SystemState *sys) {
   for (int i = 0; i < sys->basket_count; i++) {
     int idx = find_product_idx(sys, sys->basket[i].ean);
@@ -23,12 +26,24 @@ void cancel_basket(SystemState *sys) {
   sys->basket_count = 0;
 }
 
+/**
+ * Swaps two basket items.
+ * @param a First item.
+ * @param b Second item.
+ */
 static void swap_basket(BasketItem *a, BasketItem *b) {
   BasketItem t = *a;
   *a = *b;
   *b = t;
 }
 
+/**
+ * Partition function for quicksort by EAN.
+ * @param arr Array of basket items.
+ * @param lo Lower index.
+ * @param hi Higher index.
+ * @return Partition index.
+ */
 static int partition_basket(BasketItem *arr, int lo, int hi) {
   char *pivot = arr[hi].ean;
   int i = lo - 1;
@@ -42,6 +57,12 @@ static int partition_basket(BasketItem *arr, int lo, int hi) {
   return i + 1;
 }
 
+/**
+ * Quicksort implementation for basket items.
+ * @param arr Array of basket items.
+ * @param lo Lower index.
+ * @param hi Higher index.
+ */
 static void quick_sort_basket(BasketItem *arr, int lo, int hi) {
   if (lo < hi) {
     int pi = partition_basket(arr, lo, hi);
@@ -50,6 +71,11 @@ static void quick_sort_basket(BasketItem *arr, int lo, int hi) {
   }
 }
 
+/**
+ * Print all basket items sorted by EAN ascending.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
 void print_sorted_basket(SystemState *sys, Iva table[]) {
   if (sys->basket_count > 1) {
     quick_sort_basket(sys->basket, 0, sys->basket_count - 1);
@@ -65,7 +91,7 @@ void print_sorted_basket(SystemState *sys, Iva table[]) {
 }
 
 /**
- * @brief Handles allocation and insertion of a new basket item.
+ * Handles allocation and insertion of a new basket item.
  * @param sys System state.
  * @param ean EAN to insert.
  * @param new_amount Quantity.
@@ -86,6 +112,12 @@ static int insert_new_basket_item(SystemState *sys, const char *ean,
   return idx;
 }
 
+/**
+ * Retrieves the index of an EAN in the current basket.
+ * @param sys System state.
+ * @param ean EAN to find.
+ * @return Basket index or -1 if not found.
+ */
 static int get_basket_idx(SystemState *sys, const char *ean) {
   for (int j = 0; j < sys->basket_count; j++) {
     if (strcmp(sys->basket[j].ean, ean) == 0) {
@@ -96,7 +128,7 @@ static int get_basket_idx(SystemState *sys, const char *ean) {
 }
 
 /**
- * @brief Validates if an item can be added to or removed from the basket.
+ * Validates if an item can be added to or removed from the basket.
  * @param sys System state.
  * @param ean EAN string.
  * @param qty Quantity to adjust.
@@ -131,6 +163,13 @@ static int validate_basket_add(SystemState *sys, const char *ean, int qty,
   return 1;
 }
 
+/**
+ * Add or remove units from the basket.
+ * @param sys System state.
+ * @param table IVA rate table.
+ * @param ean EAN of the product.
+ * @param qty Units to add or remove.
+ */
 void process_basket_add(SystemState *sys, Iva table[], const char *ean,
                         int qty) {
   int b_idx, c_idx;

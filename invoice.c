@@ -1,7 +1,7 @@
 /**
+ * Client record management and invoice operations.
  * @file invoice.c
  * @author IST1117890 (Irina Cojocari)
- * @brief Client record management and invoice operations.
  */
 
 #include "common.h"
@@ -9,6 +9,13 @@
 #include "shared.h"
 #include "utils.h"
 
+/**
+ * Return the index of a ClientRecord, inserting a new one if needed.
+ * @param sys System state.
+ * @param name Client name.
+ * @param nif Client NIF.
+ * @return Index of the client.
+ */
 int get_or_create_client(SystemState *sys, const char *name, int nif) {
   int idx = find_client_idx(sys, name);
   if (idx != -1) {
@@ -24,6 +31,7 @@ int get_or_create_client(SystemState *sys, const char *name, int nif) {
   }
 
   int i = sys->client_count - 1;
+  /* insert the client in the right place to avoid sorting later */
   while (i >= 0 && cmp_names(sys->clients[i].name, name) > 0) {
     sys->clients[i + 1] = sys->clients[i];
     i--;
@@ -42,7 +50,7 @@ int get_or_create_client(SystemState *sys, const char *name, int nif) {
 }
 
 /**
- * @brief Accumulate total basket value and item count.
+ * Accumulate total basket value and item count.
  * @param sys System state.
  * @param table IVA table.
  * @param total_cents Pointer to store total price.
@@ -63,6 +71,13 @@ static void calculate_basket_totals(SystemState *sys, Iva table[],
   }
 }
 
+/**
+ * Close the basket and append an invoice to the client's queue.
+ * @param sys System state.
+ * @param table IVA rate table.
+ * @param nif Client NIF.
+ * @param name Client name.
+ */
 void finalize_invoice(SystemState *sys, Iva table[], int nif,
                       const char *name) {
   long long total_cents = 0;
@@ -93,6 +108,11 @@ void finalize_invoice(SystemState *sys, Iva table[], int nif,
   sys->basket_count = 0;
 }
 
+/**
+ * Delete the invoice with the given ID.
+ * @param sys System state.
+ * @param inv_id Invoice ID to delete.
+ */
 void cmd_d_delete_inv(SystemState *sys, int inv_id) {
   for (int ci = 0; ci < sys->client_count; ci++) {
     ClientRecord *cr = &sys->clients[ci];
@@ -121,7 +141,7 @@ void cmd_d_delete_inv(SystemState *sys, int inv_id) {
 }
 
 /**
- * @brief Check if an item is reserved in the basket.
+ * Check if an item is reserved in the basket.
  * @param sys System state.
  * @param ean EAN string.
  * @return Reserved quantity or 0.
@@ -135,6 +155,12 @@ static int get_basket_reserved_qty(SystemState *sys, const char *ean) {
   return 0;
 }
 
+/**
+ * Reduce product stock by qty and print status.
+ * @param sys System state.
+ * @param cat_idx Catalog index.
+ * @param qty Units to remove.
+ */
 static void remove_stock_and_print(SystemState *sys, int cat_idx, int qty) {
   sys->catalog[cat_idx].stock -= qty;
   if (sys->catalog[cat_idx].stock == 0) {
@@ -152,7 +178,7 @@ static void remove_stock_and_print(SystemState *sys, int cat_idx, int qty) {
 }
 
 /**
- * @brief Validates if stock can be reduced for a specific item.
+ * Validates if stock can be reduced for a specific item.
  * @param sys System state.
  * @param ean EAN string.
  * @param qty Quantity to remove.
@@ -181,6 +207,12 @@ static int validate_stock_reduction(SystemState *sys, const char *ean, int qty,
   return 1;
 }
 
+/**
+ * Reduce product stock by qty.
+ * @param sys System state.
+ * @param ean Product EAN.
+ * @param qty Units to remove.
+ */
 void cmd_d_reduce_stock(SystemState *sys, const char *ean, int qty) {
   int cat_idx;
   if (validate_stock_reduction(sys, ean, qty, &cat_idx)) {

@@ -1,11 +1,17 @@
 /**
+ * Tracked memory management: allocation, resizing, and cleanup.
  * @file memory.c
  * @author IST1117890 (Irina Cojocari)
- * @brief Tracked memory management: allocation, resizing, and cleanup.
  */
 
 #include "memory.h"
 
+/**
+ * Decrement the memory counter then free a previously tracked block.
+ * @param pointer Pointer to the block to free.
+ * @param size Byte count originally allocated.
+ * @param sys System state.
+ */
 void free_safe(void *pointer, size_t size, SystemState *sys) {
   if (pointer) {
     sys->memory_used = (sys->memory_used >= size) ? sys->memory_used - size : 0;
@@ -13,6 +19,10 @@ void free_safe(void *pointer, size_t size, SystemState *sys) {
   }
 }
 
+/**
+ * Release every heap allocation owned by sys.
+ * @param sys System state to clean up.
+ */
 void clean_all(SystemState *sys) {
   if (sys->basket) {
     free_safe(sys->basket, sys->basket_capacity * sizeof(BasketItem), sys);
@@ -42,7 +52,7 @@ void clean_all(SystemState *sys) {
 }
 
 /**
- * @brief Print "No memory." and terminate program cleanly.
+ * Print "No memory." and terminate program cleanly.
  * @param sys System state.
  */
 static void no_memory(SystemState *sys) {
@@ -51,6 +61,12 @@ static void no_memory(SystemState *sys) {
   exit(0);
 }
 
+/**
+ * Allocate size bytes and track the allocation in sys.
+ * @param size Number of bytes to allocate.
+ * @param sys System state.
+ * @return Pointer to the newly allocated block.
+ */
 void *safemalloc(size_t size, SystemState *sys) {
   if (size == 0)
     return NULL;
@@ -63,6 +79,14 @@ void *safemalloc(size_t size, SystemState *sys) {
   return p;
 }
 
+/**
+ * Resize a tracked allocation.
+ * @param pointer Pointer to the block to resize.
+ * @param old_size Current size of the block.
+ * @param new_size Desired size of the block.
+ * @param sys System state.
+ * @return Pointer to the resized block.
+ */
 void *safe_realloc(void *pointer, size_t old_size, size_t new_size,
                    SystemState *sys) {
   if (new_size > old_size) {

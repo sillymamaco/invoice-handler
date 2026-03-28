@@ -1,7 +1,7 @@
 /**
+ * Product catalog management.
  * @file catalog.c
  * @author IST1117890 (Irina Cojocari)
- * @brief Product catalog management.
  */
 
 #include "commands.h"
@@ -9,6 +9,12 @@
 #include "shared.h"
 #include "utils.h"
 
+/**
+ * Read one command argument line from stdin into buf.
+ * @param buf Destination buffer.
+ * @param bufsz Size of buf in bytes.
+ * @return Non-zero if characters were read.
+ */
 int read_p_line(char *buf, int bufsz) {
   int c;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
@@ -28,6 +34,11 @@ int read_p_line(char *buf, int bufsz) {
   return 1;
 }
 
+/**
+ * Skips the first four tokens of a p line to find the description.
+ * @param dp Pointer to the line string.
+ * @return Pointer to the description start.
+ */
 static const char *skip_p_tokens(const char *dp) {
   int skipped = 0;
   while (*dp && skipped < 4) {
@@ -42,6 +53,12 @@ static const char *skip_p_tokens(const char *dp) {
   return dp;
 }
 
+/**
+ * Return a copy of the product description.
+ * @param line Full argument line.
+ * @param sys System state.
+ * @return Description string or NULL.
+ */
 char *extract_desc(const char *line, SystemState *sys) {
   const char *dp = skip_p_tokens(line);
   if (!*dp)
@@ -59,6 +76,15 @@ char *extract_desc(const char *line, SystemState *sys) {
   return desc;
 }
 
+/**
+ * Insert a new product into the catalog.
+ * @param sys System state.
+ * @param ean EAN string.
+ * @param iva_c IVA letter.
+ * @param price Unit price.
+ * @param stock Initial stock.
+ * @param desc Description.
+ */
 void catalog_insert(SystemState *sys, const char *ean, char iva_c, double price,
                     int stock, char *desc) {
   if (sys->catalog_count == sys->catalog_capacity) {
@@ -68,6 +94,7 @@ void catalog_insert(SystemState *sys, const char *ean, char iva_c, double price,
                      nc * sizeof(Product), sys);
     sys->catalog_capacity = nc;
   }
+  /* insert in the right place to avoid sorting later */
   int i = sys->catalog_count - 1;
   while (i >= 0 && strcmp(sys->catalog[i].ean, ean) > 0) {
     sys->catalog[i + 1] = sys->catalog[i];
@@ -84,6 +111,17 @@ void catalog_insert(SystemState *sys, const char *ean, char iva_c, double price,
   sys->catalog_count++;
 }
 
+/**
+ * Update an existing product.
+ * @param sys System state.
+ * @param idx Catalog index.
+ * @param ean Product EAN.
+ * @param iva_c New IVA letter.
+ * @param price New price.
+ * @param stock Stock to add.
+ * @param desc New description.
+ * @return Non-zero on success.
+ */
 int catalog_update(SystemState *sys, int idx, const char *ean, char iva_c,
                    double price, int stock, char *desc) {
   for (int i = 0; i < sys->basket_count; i++) {
@@ -101,6 +139,11 @@ int catalog_update(SystemState *sys, int idx, const char *ean, char iva_c,
   return 1;
 }
 
+/**
+ * Parses a price string, ensuring it's not in scientific notation.
+ * @param price_str String to parse.
+ * @return Parsed price or -1.0 on error.
+ */
 static double parse_price_field(const char *price_str) {
   char *pe = NULL;
   double price = strtod(price_str, &pe);
@@ -113,6 +156,11 @@ static double parse_price_field(const char *price_str) {
   return price;
 }
 
+/**
+ * Parses a stock string, ensuring it is a positive integer.
+ * @param stock_str String to parse.
+ * @return Parsed stock or -1 on error.
+ */
 static int parse_stock_field(const char *stock_str) {
   char *se = NULL;
   long sl = strtol(stock_str, &se, 10);
@@ -121,6 +169,15 @@ static int parse_stock_field(const char *stock_str) {
   return (int)sl;
 }
 
+/**
+ * Parse fields from a p command line.
+ * @param linebuf Full argument line.
+ * @param ean Output buffer for EAN.
+ * @param iva_c Receives IVA letter.
+ * @param price Receives price.
+ * @param stock Receives quantity.
+ * @return Non-zero when tokens are successfully parsed.
+ */
 int parse_p_fields(const char *linebuf, char ean[14], char *iva_c,
                    double *price, int *stock) {
   char ean_raw[16] = {0}, iva_str[16] = {0}, price_str[32] = {0},
@@ -146,12 +203,24 @@ int parse_p_fields(const char *linebuf, char ean[14], char *iva_c,
   return 1;
 }
 
+/**
+ * Swaps two product pointers.
+ * @param a First pointer.
+ * @param b Second pointer.
+ */
 static void swap_ordered(Product **a, Product **b) {
   Product *t = *a;
   *a = *b;
   *b = t;
 }
 
+/**
+ * Partition function for quicksort by insertion order.
+ * @param arr Array of product pointers.
+ * @param lo Lower index.
+ * @param hi Higher index.
+ * @return Partition index.
+ */
 static int partition_ordered(Product **arr, int lo, int hi) {
   int pivot = arr[hi]->insert_order, i = lo - 1;
   for (int j = lo; j < hi; j++) {
@@ -164,6 +233,12 @@ static int partition_ordered(Product **arr, int lo, int hi) {
   return i + 1;
 }
 
+/**
+ * Quicksort implementation for insertion order.
+ * @param arr Array of product pointers.
+ * @param lo Lower index.
+ * @param hi Higher index.
+ */
 static void quick_sort_ordered(Product **arr, int lo, int hi) {
   if (lo < hi) {
     int pi = partition_ordered(arr, lo, hi);
@@ -172,6 +247,11 @@ static void quick_sort_ordered(Product **arr, int lo, int hi) {
   }
 }
 
+/**
+ * Allocate and return a Product* array sorted by insert_order.
+ * @param sys System state.
+ * @return Sorted array of Product pointers.
+ */
 Product **build_ordered(SystemState *sys) {
   if (sys->catalog_count == 0)
     return NULL;
@@ -183,6 +263,13 @@ Product **build_ordered(SystemState *sys) {
   return ordered;
 }
 
+/**
+ * Print in-stock products matching a token.
+ * @param sys System state.
+ * @param ordered Insertion-order pointer array.
+ * @param token EAN string or wildcard pattern.
+ * @return Non-zero if anything was printed.
+ */
 int print_l_token(SystemState *sys, Product **ordered, const char *token) {
   int found = 0;
   if (strchr(token, '*') || strchr(token, '?')) {
@@ -202,6 +289,11 @@ int print_l_token(SystemState *sys, Product **ordered, const char *token) {
   return found;
 }
 
+/**
+ * Print all in-stock products in insertion order.
+ * @param sys System state.
+ * @param ordered Insertion-order pointer array.
+ */
 void cmd_l_all(SystemState *sys, Product **ordered) {
   int found = 0;
   for (int i = 0; i < sys->catalog_count; i++) {
@@ -214,6 +306,12 @@ void cmd_l_all(SystemState *sys, Product **ordered) {
     printf("*: no such product\n");
 }
 
+/**
+ * Print products for each whitespace-separated token.
+ * @param sys System state.
+ * @param ordered Insertion-order pointer array.
+ * @param buf Mutable token string.
+ */
 void cmd_l_tokens(SystemState *sys, Product **ordered, char *buf) {
   char *token = strtok(buf, " \t\r\n");
   while (token) {
@@ -223,6 +321,15 @@ void cmd_l_tokens(SystemState *sys, Product **ordered, char *buf) {
   }
 }
 
+/**
+ * Handles internal logic for p command (update or insert).
+ * @param sys System state.
+ * @param ean EAN string.
+ * @param iva_c IVA letter.
+ * @param price Price.
+ * @param stock Stock.
+ * @param desc Description.
+ */
 static void handle_catalog_update_insert(SystemState *sys, const char *ean,
                                          char iva_c, double price, int stock,
                                          char *desc) {
@@ -244,6 +351,11 @@ static void handle_catalog_update_insert(SystemState *sys, const char *ean,
   printf("%d\n", sys->catalog[idx].stock);
 }
 
+/**
+ * Insert or update a product in the catalog.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
 void cmd_p(SystemState *sys, Iva table[]) {
   char linebuf[MAX_INSTRC_LENGTH] = {0};
   if (!read_p_line(linebuf, MAX_INSTRC_LENGTH))
@@ -267,6 +379,10 @@ void cmd_p(SystemState *sys, Iva table[]) {
   handle_catalog_update_insert(sys, ean, iva_c, price, stock, desc);
 }
 
+/**
+ * List available products.
+ * @param sys System state.
+ */
 void cmd_l(SystemState *sys) {
   char buf[MAX_INSTRC_LENGTH] = {0};
   Product **ordered = build_ordered(sys);
@@ -282,9 +398,9 @@ void cmd_l(SystemState *sys) {
 }
 
 /**
- * @brief Handles bare r command to print metrics.
+ * Prints the global billing summary and IVA rates.
  * @param sys System state.
- * @param table IVA rate table.
+ * @param table IVA table.
  */
 static void cmd_r_global_summary(SystemState *sys, Iva table[]) {
   printf("%d %d %.2f\n", sys->global_items, sys->next_invoice_id - 1,
@@ -295,6 +411,11 @@ static void cmd_r_global_summary(SystemState *sys, Iva table[]) {
   }
 }
 
+/**
+ * Print billing summary or product stock info.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
 void cmd_r(SystemState *sys, Iva table[]) {
   char buf[MAX_INSTRC_LENGTH] = {0};
 

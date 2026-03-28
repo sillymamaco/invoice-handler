@@ -1,7 +1,7 @@
 /**
+ * Handlers for basket add/remove, invoice finalisation, client lists.
  * @file commands.c
  * @author IST1117890 (Irina Cojocari)
- * @brief Handlers for basket add/remove, invoice finalisation, client lists.
  */
 
 #include "commands.h"
@@ -9,6 +9,12 @@
 #include "shared.h"
 #include "utils.h"
 
+/**
+ * Parses the client name for the c command.
+ * @param sys System state.
+ * @param name Output name buffer.
+ * @return Non-zero on success.
+ */
 static int parse_c_name(SystemState *sys, char *name) {
   char *line = read_token_safe(sys);
   if (!line)
@@ -34,6 +40,10 @@ static int parse_c_name(SystemState *sys, char *name) {
   return 1;
 }
 
+/**
+ * Prints all invoices for a given client.
+ * @param cr Client record.
+ */
 static void print_client_invoices(const ClientRecord *cr) {
   for (int ii = 0; ii < cr->invoice_count; ii++) {
     printf("%d %.2f %s\n", cr->invoices[ii].id,
@@ -41,6 +51,11 @@ static void print_client_invoices(const ClientRecord *cr) {
   }
 }
 
+/**
+ * Add a quantity of a product to the basket.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
 void cmd_a(SystemState *sys, Iva table[]) {
   char buf[BUFFER_LIMIT] = {0};
 
@@ -71,6 +86,14 @@ void cmd_a(SystemState *sys, Iva table[]) {
   process_basket_add(sys, table, ean, qty);
 }
 
+/**
+ * Handles nif and name distinction if only one argument is provided.
+ * @param start Word pointer.
+ * @param len Word length.
+ * @param nif_raw Output NIF buffer.
+ * @param name_buf Output name buffer.
+ * @param has_name Output flag for name.
+ */
 static void handle_f_single_word(const char *start, size_t len, char *nif_raw,
                                  char *name_buf, int *has_name) {
   char w1[MAX_INSTRC_LENGTH];
@@ -91,6 +114,16 @@ static void handle_f_single_word(const char *start, size_t len, char *nif_raw,
   }
 }
 
+/**
+ * Handles nifs and names when both arguments are provided.
+ * @param start NIF word pointer.
+ * @param len NIF length.
+ * @param after_w1 Name start pointer.
+ * @param nif_raw Output NIF buffer.
+ * @param name_buf Output name buffer.
+ * @param has_name Output flag for name.
+ * @param valid_name Output flag for name validity.
+ */
 static void handle_f_multi_word(const char *start, size_t len,
                                 const char *after_w1, char *nif_raw,
                                 char *name_buf, int *has_name,
@@ -116,6 +149,41 @@ static void handle_f_multi_word(const char *start, size_t len,
     *valid_name = 0;
 }
 
+/**
+ * Handles arguments when no quotes are present at the start of the line.
+ * @param ptr Pointer to the first non-space character.
+ * @param nif_raw Output NIF buffer.
+ * @param name_buf Output name buffer.
+ * @param has_name Output flag for name.
+ * @param valid_name Output flag for name validity.
+ */
+static void handle_unquoted_args(const char *ptr, char *nif_raw, char *name_buf,
+                                 int *has_name, int *valid_name) {
+  const char *start = ptr;
+  while (*ptr && !isspace((unsigned char)*ptr))
+    ptr++;
+  size_t len = ptr - start;
+
+  const char *after_w1 = ptr;
+  while (*after_w1 && isspace((unsigned char)*after_w1))
+    after_w1++;
+
+  if (*after_w1 == '\0') {
+    handle_f_single_word(start, len, nif_raw, name_buf, has_name);
+  } else {
+    handle_f_multi_word(start, len, after_w1, nif_raw, name_buf, has_name,
+                        valid_name);
+  }
+}
+
+/**
+ * Parses arguments for the f command.
+ * @param line Full line.
+ * @param nif_raw Output NIF buffer.
+ * @param name_buf Output name buffer.
+ * @param has_name Output flag for name.
+ * @param valid_name Output flag for name validity.
+ */
 static void parse_f_args(const char *line, char *nif_raw, char *name_buf,
                          int *has_name, int *valid_name) {
   *has_name = 0;
@@ -139,23 +207,15 @@ static void parse_f_args(const char *line, char *nif_raw, char *name_buf,
     return;
   }
 
-  const char *start = ptr;
-  while (*ptr && !isspace((unsigned char)*ptr))
-    ptr++;
-  size_t len = ptr - start;
-
-  const char *after_w1 = ptr;
-  while (*after_w1 && isspace((unsigned char)*after_w1))
-    after_w1++;
-
-  if (*after_w1 == '\0') {
-    handle_f_single_word(start, len, nif_raw, name_buf, has_name);
-  } else {
-    handle_f_multi_word(start, len, after_w1, nif_raw, name_buf, has_name,
-                        valid_name);
-  }
+  handle_unquoted_args(ptr, nif_raw, name_buf, has_name, valid_name);
 }
 
+/**
+ * Validates a NIF string.
+ * @param nif_raw Raw NIF string.
+ * @param nif Output nif integer.
+ * @return Non-zero if valid.
+ */
 static int validate_f_nif(const char *nif_raw, int *nif) {
   int all_digits = 1;
   for (int i = 0; nif_raw[i]; i++) {
@@ -176,6 +236,11 @@ static int validate_f_nif(const char *nif_raw, int *nif) {
   return 1;
 }
 
+/**
+ * Finalise the basket into an invoice.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
 void cmd_f(SystemState *sys, Iva table[]) {
   int nif = DEFAULT_NIF, has_name = 0, valid_name = 1;
   char name_buf[MAX_INSTRC_LENGTH] = "", nif_raw[MAX_INSTRC_LENGTH] = "";
@@ -208,6 +273,10 @@ void cmd_f(SystemState *sys, Iva table[]) {
   finalize_invoice(sys, table, nif, name_buf);
 }
 
+/**
+ * List invoices for a client or all clients.
+ * @param sys System state.
+ */
 void cmd_c(SystemState *sys) {
   char name[MAX_INSTRC_LENGTH] = "";
   if (!parse_c_name(sys, name) ||
@@ -228,6 +297,10 @@ void cmd_c(SystemState *sys) {
   print_client_invoices(&sys->clients[ci]);
 }
 
+/**
+ * Delete an invoice or reduce product stock.
+ * @param sys System state.
+ */
 void cmd_d(SystemState *sys) {
   char buf[MAX_INSTRC_LENGTH] = {0};
   if (!read_line_to_buffer(buf, MAX_INSTRC_LENGTH) && buf[0] == '\0')

@@ -1,7 +1,7 @@
 /**
+ * Global type definitions and system state for the billing system.
  * @file common.h
  * @author IST1117890 (Irina Cojocari)
- * @brief Global type definitions and system state for the billing system.
  */
 
 #ifndef COMMON_H
@@ -12,26 +12,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief Maximum heap memory the program may use (10 MiB). */
+/** The maximum number of values stored. (10 MB)*/
 #define MAX_MEMORY_ALLOCATED (10 * 1024 * 1024)
 
-/** @brief Maximum length of a single input line in bytes. */
+/** Maximum length of a single input line in bytes. */
 #define MAX_INSTRC_LENGTH 65535
 
-/** @brief Multi-purpose buffer for strings. */
+/** Multi-purpose buffer for strings. */
 #define BUFFER_LIMIT 1024
 
-/** @brief Number of slots in the IVA lookup table. */
+/** Number of slots in the IVA lookup table. */
 #define IVA_TABLE_SIZE 26
 
-/** @brief Maximum catalog products allowed. */
+/** Maximum catalog products allowed. */
 #define MAX_CATALOG_PRODUCTS 10000
 
-/** @brief Default NIF value for final consumer. */
+/** Default NIF value for final consumer. */
 #define DEFAULT_NIF 999999999
 
 /**
- * @brief One entry in the IVA rate table.
+ * One entry in the IVA rate table.
  */
 typedef struct {
   int value;   /**< Tax percentage, e.g. 23 for 23 %. */
@@ -39,20 +39,21 @@ typedef struct {
 } Iva;
 
 /**
- * @brief A product registered in the catalog.
+ * A product registered in the catalog.
  */
 typedef struct {
-  char *desc;       /**< Heap-allocated description string. */
+  char *desc;       /**< Dinamically allocated description string. */
   double price;     /**< Unit price before IVA. */
   int stock;        /**< Units currently available. */
-  int sold;         /**< Cumulative units sold or reserved. */
+  int sold;         /**< Cumulative units sold or in the basket. */
   int insert_order; /**< Counter used in cmd_l. */
   char ean[14];     /**< EAN-8 or EAN-13 code plus '\0' */
   char iva_class;   /**< IVA class letter, e.g. 'D'. */
 } Product;
 
 /**
- * @brief A finalised invoice stored in a client's FIFO queue.
+ * A finalised invoice stored in a client's FIFO queue. The clients are sorted
+ * in a glorified hash table (array by nif of FIFOs in chronological order).
  */
 typedef struct {
   long long total_cents; /**< Total value including IVA. */
@@ -62,10 +63,10 @@ typedef struct {
 } Invoice;
 
 /**
- * @brief Record per-client that owns a FIFO queue of invoices.
+ * Record per-client that owns a FIFO queue of invoices.
  */
 typedef struct {
-  char *name;        /**< Heap-allocated client name. */
+  char *name;        /**< Dinamically allocated client name. */
   int nif;           /**< Client NIF. */
   Invoice *invoices; /**< Dynamic array of invoices. */
   int invoice_count; /**< Number of invoices currently stored. */
@@ -73,7 +74,7 @@ typedef struct {
 } ClientRecord;
 
 /**
- * @brief One line item in the shopping basket.
+ * One line item in the shopping basket.
  */
 typedef struct {
   char ean[14]; /**< EAN code that identifies the product. */
@@ -81,7 +82,7 @@ typedef struct {
 } BasketItem;
 
 /**
- * @brief Top-level system state passed to every command handler.
+ * Top-level system state passed to every command handler.
  */
 typedef struct {
   Product *catalog;     /**< Dynamic array of products sorted by EAN. */

@@ -1,7 +1,7 @@
 /**
+ * Prototypes for utility functions.
  * @file utils.h
  * @author IST1117890 (Irina Cojocari)
- * @brief Prototypes for utility functions.
  */
 
 #ifndef UTILS_H
@@ -10,15 +10,16 @@
 #include "common.h"
 
 /**
- * @brief Fill buffer from stdin until newline or EOF.
+ * Fill buffer from stdin until newline or EOF.
  * @param buf Buffer to fill.
  * @param i Pointer to index.
- * @param truncated Pointer to truncation flag.
+ * @param truncated Pointer to truncation flag (for big inputs that exceed
+ *                  limit such as client names).
  */
 void fill_buffer_from_stdin(char *buf, int *i, int *truncated);
 
 /**
- * @brief Extract a string handling quotes.
+ * Extract a string handling quotes.
  * @param ptr Pointer to input stream.
  * @param name_buf Output buffer.
  * @param name_buf_size Buffer size.
@@ -28,7 +29,7 @@ int extract_quoted_string(const char **ptr, char *name_buf,
                           size_t name_buf_size);
 
 /**
- * @brief Read a full line from stdin into a buffer.
+ * Read a full line from stdin into a buffer.
  * @param buf Output buffer.
  * @param limit Buffer size limit.
  * @return Non-zero if line was truncated.
@@ -36,14 +37,14 @@ int extract_quoted_string(const char **ptr, char *name_buf,
 int read_line_to_buffer(char *buf, size_t limit);
 
 /**
- * @brief Read the rest of the current stdin line as a single token.
+ * Read the rest of the current stdin line as a single token.
  * @param sys System state.
  * @return Dynamically allocated string, or NULL for a blank line.
  */
 char *read_token_safe(SystemState *sys);
 
 /**
- * @brief bsearch comparator: EAN string key vs Product element.
+ * bsearch comparator: EAN string key vs Product element.
  * @param key Pointer to an EAN string.
  * @param elem Pointer to a product.
  * @return Comparison result.
@@ -51,7 +52,7 @@ char *read_token_safe(SystemState *sys);
 int cmp_product_search(const void *key, const void *elem);
 
 /**
- * @brief Binary-search the catalog for a product by EAN.
+ * Binary-search the catalog for a product by EAN.
  * @param sys System state.
  * @param ean EAN string to find.
  * @return Index or -1 if not found.
@@ -59,7 +60,7 @@ int cmp_product_search(const void *key, const void *elem);
 int find_product_idx(SystemState *sys, const char *ean);
 
 /**
- * @brief Check whether an IVA class letter is defined.
+ * Check whether an IVA class letter is defined.
  * @param table IVA rate table.
  * @param letter Class letter.
  * @return Non-zero if present.
@@ -67,7 +68,7 @@ int find_product_idx(SystemState *sys, const char *ean);
 int iva_is_present(const Iva table[], char letter);
 
 /**
- * @brief Retrieve the tax rate for an IVA class letter.
+ * Retrieve the tax rate for an IVA class letter.
  * @param table IVA rate table.
  * @param letter Class letter.
  * @return Tax percentage.
@@ -75,7 +76,7 @@ int iva_is_present(const Iva table[], char letter);
 int get_iva_rate(const Iva table[], char letter);
 
 /**
- * @brief Define or update one slot in the IVA rate table.
+ * Define or update one slot in the IVA rate table.
  * @param table IVA rate table.
  * @param letter Class letter.
  * @param value Tax percentage.
@@ -83,28 +84,28 @@ int get_iva_rate(const Iva table[], char letter);
 void iva_set(Iva table[], char letter, int value);
 
 /**
- * @brief Validate an EAN code.
+ * Validate an EAN code.
  * @param ean EAN string.
  * @return Non-zero if valid.
  */
 int validate_ean(const char *ean);
 
 /**
- * @brief Check that a description starts with a valid character.
+ * Check that a description starts with a valid character.
  * @param s Description string.
  * @return Non-zero if valid.
  */
 int is_valid_desc_start(const char *s);
 
 /**
- * @brief Check that a client name starts with a valid character.
+ * Check that a client name starts with a valid character.
  * @param s Name string.
  * @return Non-zero if valid.
  */
 int is_valid_name_start(const char *s);
 
 /**
- * @brief Validate fields of a p command.
+ * Validate fields of a p command.
  * @param ean EAN string.
  * @param iva_ok IVA validity flag.
  * @param price Parsed price.
@@ -116,7 +117,7 @@ int validate_p_input(const char *ean, int iva_ok, double price, int stock,
                      const char *desc);
 
 /**
- * @brief Test whether text matches a shell-style pattern.
+ * Test whether text matches a given pattern with wildcards.
  * @param pattern Wildcard pattern.
  * @param text Text to match.
  * @return Non-zero if match is found.
@@ -124,23 +125,23 @@ int validate_p_input(const char *ean, int iva_ok, double price, int stock,
 int match(const char *pattern, const char *text);
 
 /**
- * @brief Print one product line.
+ * Print one product line.
  * @param p Pointer to the product.
  */
 void print_product(const Product *p);
 
 /**
- * @brief Print one basket line.
+ * Print one basket line.
  * @param sys System state.
  * @param table IVA rate table.
- * @param cat_idx Index of the product.
+ * @param cat_idx Index of the product in the catalog.
  * @param qty Quantity to display.
  */
 void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
                        int qty);
 
 /**
- * @brief Compare two client name strings.
+ * Compare two client name strings.
  * @param a First name.
  * @param b Second name.
  * @return Comparison result.
@@ -148,7 +149,7 @@ void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
 int cmp_names(const char *a, const char *b);
 
 /**
- * @brief Binary-search the client array for a record by name.
+ * Binary-search the client array for a record by name.
  * @param sys System state.
  * @param name Client name.
  * @return Index or -1 if not found.
