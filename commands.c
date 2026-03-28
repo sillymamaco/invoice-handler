@@ -165,7 +165,7 @@ static int validate_f_nif(const char *nif_raw, int *nif) {
     }
   }
   if (!all_digits) {
-  printf("%s: no such nif\n", nif_raw);
+    printf("%s: no such nif\n", nif_raw);
     return 0;
   }
   *nif = atoi(nif_raw);

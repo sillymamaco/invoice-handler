@@ -116,13 +116,6 @@ int validate_p_input(const char *ean, int iva_ok, double price, int stock,
                      const char *desc);
 
 /**
- * @brief Round value to the nearest cent.
- * @param val Monetary value.
- * @return Rounded value.
- */
-double round_money(double val);
-
-/**
  * @brief Test whether text matches a shell-style pattern.
  * @param pattern Wildcard pattern.
  * @param text Text to match.
@@ -145,17 +138,6 @@ void print_product(const Product *p);
  */
 void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
                        int qty);
-
-/**
- * @brief Parse the argument string of an f command.
- * @param line Argument string.
- * @param nif Receives parsed NIF.
- * @param name_buf Buffer for client name.
- * @param name_buf_size Size of name_buf.
- * @return Non-zero if valid.
- */
-int parse_invoice_client(const char *line, int *nif, char *name_buf,
-                         size_t name_buf_size);
 
 /**
  * @brief Compare two client name strings.

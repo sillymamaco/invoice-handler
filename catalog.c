@@ -9,12 +9,6 @@
 #include "shared.h"
 #include "utils.h"
 
-void drain_line(void) {
-  int c;
-  while ((c = getchar()) != '\n' && c != EOF)
-    ;
-}
-
 int read_p_line(char *buf, int bufsz) {
   int c;
   while ((c = getchar()) == ' ' || c == '\t' || c == '\r')
