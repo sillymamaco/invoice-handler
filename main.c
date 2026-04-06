@@ -1,22 +1,26 @@
-/**
+/*
  * Program entry point.
  * @file main.c
  * @author IST1117890 (Irina Cojocari)
  */
 
-#include "commands.h"
-#include "common.h"
-#include "memory.h"
-#include "utils.h"
+#include "main.h"
+#include "a.h"
+#include "c.h"
+#include "d.h"
+#include "f.h"
+#include "l.h"
+#include "p.h"
+#include "r.h"
 
-/**
- * Initialize the IVA table from arguments or defaults.
+/*
+ * Initializes the IVA table from arguments or defaults.
  * @param argc Argument count.
  * @param argv Argument vector.
  * @param iva_table Array to initialize.
  */
 static void init_iva_table(int argc, char *argv[], Iva iva_table[]) {
-  if (argc == 1) {
+  if (argc == 1) { /* default values if no file provided */
     iva_set(iva_table, 'A', 0);
     iva_set(iva_table, 'B', 6);
     iva_set(iva_table, 'C', 13);
@@ -37,17 +41,14 @@ static void init_iva_table(int argc, char *argv[], Iva iva_table[]) {
   }
 }
 
-/**
+/*
  * Dispatch the correct command.
  * @param command Command character.
  * @param sys System state.
  * @param iva_table IVA table.
- * @return 0 if quit, 1 to continue.
  */
-static int process_command(int command, SystemState *sys, Iva iva_table[]) {
+static void process_command(int command, SystemState *sys, Iva iva_table[]) {
   switch (command) {
-  case 'q':
-    return 0;
   case 'p':
     cmd_p(sys, iva_table);
     break;
@@ -72,10 +73,9 @@ static int process_command(int command, SystemState *sys, Iva iva_table[]) {
   default:
     break;
   }
-  return 1;
 }
 
-/**
+/*
  * Initialise the system and run the command dispatch loop.
  * @param argc Argument count.
  * @param argv Argument vector.
@@ -92,8 +92,12 @@ int main(int argc, char *argv[]) {
   while ((command = getchar()) != EOF) {
     if (isspace(command))
       continue;
-    if (!process_command(command, &sys, iva_table))
+
+    if (command == 'q') {
       break;
+    }
+
+    process_command(command, &sys, iva_table);
   }
 
   clean_all(&sys);

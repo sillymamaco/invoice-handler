@@ -1,0 +1,5 @@
+p 5601009993352 A 10.00 10 Produto Original
+a 2 5601009993352
+p 5601009993352 A 10.00 5 Produto Atualizado
+p 5601009993352 A 15.00 5 Produto Mais Caro
+q

@@ -1,0 +1,16 @@
+p 5601234567892 A 1.5 100 Açúcar_Moreno
+p 8700216266628 D 7.94 20 Champô_H&S
+p 12345678 B 10.00 0 Esgotado
+l
+a 2 8700216266628
+a 5 5601234567892
+a
+r
+f error
+r 5601234567892
+a 1 5601234567892
+f 123456789 "Este e um nome de cliente propositadamente muito longo para testar se o programa aguenta mais de cinquenta bytes sem crashar"
+c
+r
+d 1
+q

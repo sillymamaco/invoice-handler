@@ -1,0 +1,233 @@
+/*
+ * Command 'a' implementation (basket add).
+ * @file a.c
+ * @author IST1117890 (Irina Cojocari)
+ */
+
+#include "a.h"
+#include "f.h"
+#include "l.h"
+#include "p.h"
+#include "r.h"
+
+/*
+ * Print one basket line.
+ * @param sys System state.
+ * @param table IVA rate table.
+ * @param cat_idx Index of the product.
+ * @param qty Quantity to display.
+ */
+static void print_basket_item(SystemState *sys, const Iva table[], int cat_idx,
+                              int qty) {
+  double price = sys->catalog[cat_idx].price;
+  int iva = get_iva_rate(table, sys->catalog[cat_idx].iva_class);
+  /* Avoiding math with floats */
+  long long price_cents = (long long)(price * 100.0 + 0.5);
+  long long numerator = price_cents * qty * (100 + iva);
+  long long total_cents = (numerator + 50) / 100;
+
+  printf("%c %.2f %d %.2f %s\n", sys->catalog[cat_idx].iva_class, price, qty,
+         total_cents / 100.0, sys->catalog[cat_idx].desc);
+}
+
+/*
+ * Swaps two basket items.
+ * @param a First item.
+ * @param b Second item.
+ */
+static void swap_basket(BasketItem *a, BasketItem *b) {
+  BasketItem t = *a;
+  *a = *b;
+  *b = t;
+}
+
+/*
+ * Partition function for quicksort by EAN.
+ * @param arr Array of basket items.
+ * @param lo Lower index.
+ * @param hi Higher index.
+ * @return Partition index.
+ */
+static int partition_basket(BasketItem *arr, int lo, int hi) {
+  char *pivot = arr[hi].ean;
+  int i = lo - 1;
+  for (int j = lo; j < hi; j++) {
+    if (strcmp(arr[j].ean, pivot) < 0) {
+      i++;
+      swap_basket(&arr[i], &arr[j]);
+    }
+  }
+  swap_basket(&arr[i + 1], &arr[hi]);
+  return i + 1;
+}
+
+/*
+ * Quicksort implementation for basket items.
+ * @param arr Array of basket items.
+ * @param lo Lower index.
+ * @param hi Higher index.
+ */
+static void quick_sort_basket(BasketItem *arr, int lo, int hi) {
+  if (lo < hi) {
+    int pi = partition_basket(arr, lo, hi);
+    quick_sort_basket(arr, lo, pi - 1);
+    quick_sort_basket(arr, pi + 1, hi);
+  }
+}
+
+/*
+ * Print all basket items sorted by EAN ascending.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
+static void print_sorted_basket(SystemState *sys, Iva table[]) {
+  if (sys->basket_count > 1) {
+    quick_sort_basket(sys->basket, 0, sys->basket_count - 1);
+  }
+  for (int i = 0; i < sys->basket_count; i++) {
+    if (sys->basket[i].amount > 0) {
+      /* fetch product info in the catalog */
+      int idx = find_product_idx(sys, sys->basket[i].ean);
+      if (idx != -1) {
+        print_basket_item(sys, table, idx, sys->basket[i].amount);
+      }
+    }
+  }
+}
+
+/*
+ * Handles allocation and insertion of a new basket item.
+ * @param sys System state.
+ * @param ean EAN to insert.
+ * @param new_amount Quantity.
+ * @return Index of the new basket item.
+ */
+static int insert_new_basket_item(SystemState *sys, const char *ean,
+                                  int new_amount) {
+  if (sys->basket_count == sys->basket_capacity) {
+    int nc = sys->basket_capacity ? sys->basket_capacity * 2 : 10;
+    sys->basket =
+        safe_realloc(sys->basket, sys->basket_capacity * sizeof(BasketItem),
+                     nc * sizeof(BasketItem), sys);
+    sys->basket_capacity = nc;
+  }
+  int idx = sys->basket_count++;
+  strcpy(sys->basket[idx].ean, ean);
+  sys->basket[idx].amount = new_amount;
+  return idx;
+}
+
+/*
+ * Retrieves the index of an EAN in the current basket.
+ * @param sys System state.
+ * @param ean EAN to find.
+ * @return Basket index or -1 if not found.
+ */
+int get_basket_idx(SystemState *sys, const char *ean) {
+  for (int j = 0; j < sys->basket_count; j++) {
+    if (strcmp(sys->basket[j].ean, ean) == 0) {
+      return j;
+    }
+  }
+  return -1;
+}
+
+/*
+ * Validates if an item can be added to or removed from the basket.
+ * @param sys System state.
+ * @param ean EAN string.
+ * @param qty Quantity to adjust.
+ * @param b_idx Output pointer for basket index.
+ * @param c_idx Output pointer for catalog index.
+ * @return Non-zero if valid.
+ */
+static int validate_basket_add(SystemState *sys, const char *ean, int qty,
+                               int *b_idx, int *c_idx) {
+  if (qty == 0) {
+    return 0;
+  }
+  if (!validate_ean(ean)) {
+    printf("invalid ean\n");
+    return 0;
+  }
+  *b_idx = get_basket_idx(sys, ean);
+  int current = (*b_idx != -1) ? sys->basket[*b_idx].amount : 0;
+  if (qty < 0 && current + qty < 0) {
+    printf("invalid quantity\n");
+    return 0;
+  }
+  *c_idx = find_product_idx(sys, ean);
+  if (*c_idx == -1) {
+    printf("%s: no such product\n", ean);
+    return 0;
+  }
+  if (qty > 0 && qty > sys->catalog[*c_idx].stock) {
+    printf("no stock\n");
+    return 0;
+  }
+  return 1;
+}
+
+/*
+ * Add or remove units from the basket.
+ * @param sys System state.
+ * @param table IVA rate table.
+ * @param ean EAN of the product.
+ * @param qty Units to add or remove.
+ */
+static void process_basket_add(SystemState *sys, Iva table[], const char *ean,
+                               int qty) {
+  int b_idx, c_idx;
+  if (!validate_basket_add(sys, ean, qty, &b_idx, &c_idx)) {
+    return;
+  }
+
+  int current = (b_idx != -1) ? sys->basket[b_idx].amount : 0;
+  int new_amount = current + qty;
+
+  sys->catalog[c_idx].stock -= qty;
+  sys->catalog[c_idx].sold += qty;
+
+  if (b_idx != -1) {
+    sys->basket[b_idx].amount = new_amount;
+  } else {
+    insert_new_basket_item(sys, ean, new_amount);
+  }
+
+  print_basket_item(sys, table, c_idx, new_amount);
+}
+
+/*
+ * Add a quantity of a product to the basket.
+ * @param sys System state.
+ * @param table IVA rate table.
+ */
+void cmd_a(SystemState *sys, Iva table[]) {
+  char buf[BUFFER_LIMIT] = {0};
+
+  if (!read_line_to_buffer(buf, BUFFER_LIMIT) && buf[0] == '\0') {
+    print_sorted_basket(sys, table);
+    return;
+  }
+
+  char s1[BUFFER_LIMIT], s2[14];
+  char ean[14] = {0};
+  int qty = 1;
+
+  if (sscanf(buf, "%1023s %13s", s1, s2) == 2) {
+    char *endp = NULL;
+    long pq = strtol(s1, &endp, 10);
+    if (endp != s1 && *endp == '\0') {
+      qty = (int)pq;
+      strncpy(ean, s2, 13);
+      ean[13] = '\0';
+    } else {
+      strncpy(ean, s1, 13);
+      ean[13] = '\0';
+    }
+  } else {
+    strncpy(ean, s1, 13);
+    ean[13] = '\0';
+  }
+  process_basket_add(sys, table, ean, qty);
+}
